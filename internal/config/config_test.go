@@ -1,0 +1,160 @@
+package config
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// isolate points the config directory at a temp dir, on every OS, and returns
+// the path Load will use. Nothing touches the real config.
+func isolate(t *testing.T) string {
+	t.Helper()
+
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir) // linux
+	t.Setenv("HOME", dir)            // macOS
+	t.Setenv("AppData", dir)         // windows
+
+	path, err := getPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func writeConfig(t *testing.T, path, content string) {
+	t.Helper()
+
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestLoadFirstRunCreatesTheFile(t *testing.T) {
+	path := isolate(t)
+
+	got, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != defaults() {
+		t.Errorf("got %+v; want the defaults %+v", got, defaults())
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("Load should have created %s: %v", path, err)
+	}
+
+	// what was written must load back to the same settings
+	again, err := Load()
+	if err != nil || again != defaults() {
+		t.Errorf("second Load = %+v, %v; file was:\n%s", again, err, data)
+	}
+}
+
+func TestLoadReadsTheFile(t *testing.T) {
+	path := isolate(t)
+	writeConfig(t, path, `{"host": "example.test", "port": 3000}`)
+
+	got, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (Settings{Host: "example.test", Port: 3000}); got != want {
+		t.Errorf("got %+v; want %+v", got, want)
+	}
+}
+
+func TestLoadMissingKeysKeepTheirDefaults(t *testing.T) {
+	path := isolate(t)
+
+	writeConfig(t, path, `{"port": 3000}`)
+	got, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (Settings{Host: defaults().Host, Port: 3000}); got != want {
+		t.Errorf("only port set: got %+v; want %+v", got, want)
+	}
+
+	writeConfig(t, path, `{"host": "example.test"}`)
+	got, err = Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (Settings{Host: "example.test", Port: defaults().Port}); got != want {
+		t.Errorf("only host set: got %+v; want %+v", got, want)
+	}
+}
+
+func TestLoadDoesNotOverwriteAnExistingFile(t *testing.T) {
+	path := isolate(t)
+	const content = `{"port": 3000}`
+	writeConfig(t, path, content)
+
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(path)
+	if string(data) != content {
+		t.Errorf("file changed to:\n%s", data)
+	}
+}
+
+func TestLoadRejectsBadFiles(t *testing.T) {
+	cases := []struct {
+		name    string
+		content string
+	}{
+		{"not json", `{bad`},
+		{"port as a string", `{"port": "8000"}`},
+		{"port zero", `{"port": 0}`},
+		{"port negative", `{"port": -1}`},
+		{"port too big", `{"port": 99999}`},
+		{"empty host", `{"host": ""}`},
+		{"empty file", ``},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			path := isolate(t)
+			writeConfig(t, path, c.content)
+
+			got, err := Load()
+			if err == nil {
+				t.Fatalf("want an error, got none (settings %+v)", got)
+			}
+			if got != defaults() {
+				t.Errorf("settings = %+v; want the defaults alongside the error", got)
+			}
+			if !strings.Contains(err.Error(), "setting.json") {
+				t.Errorf("error %q should name the file", err)
+			}
+		})
+	}
+}
+
+func TestBaseURL(t *testing.T) {
+	cases := []struct {
+		settings Settings
+		want     string
+	}{
+		{Settings{Host: "127.0.0.1", Port: 8000}, "http://127.0.0.1:8000"},
+		{Settings{Host: "localhost", Port: 80}, "http://localhost:80"},
+		{Settings{Host: "::1", Port: 3000}, "http://[::1]:3000"},
+		{defaults(), "http://127.0.0.1:8000"},
+	}
+
+	for _, c := range cases {
+		if got := c.settings.BaseURL(); got != c.want {
+			t.Errorf("%+v.BaseURL() = %q; want %q", c.settings, got, c.want)
+		}
+	}
+}

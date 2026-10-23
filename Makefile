@@ -17,8 +17,12 @@ install:
 	rm -f ~/bin/$(NAME)
 	mv ./$(NAME) ~/bin/$(NAME)
 
+test:
+	go vet ./...
+	go test -race -count=1 ./...
+
 # direct imports of each package (own packages shown by name)
 deps:
 	@go list -f '{{.Name}}: {{join .Imports " "}}' ./... | sed 's#$(MODULE)/internal/##g'
 
-.PHONY: run debug prod install deps
+.PHONY: run debug prod install test deps
