@@ -1,0 +1,4 @@
+*.txt
+.tmp
+TODO.md
+local.json
