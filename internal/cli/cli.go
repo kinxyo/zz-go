@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"mime"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/kinxyo/zz-go/internal/config"
@@ -183,7 +185,10 @@ func resolveBody(arg string, stdin io.Reader) (string, error) {
 		body = string(b)
 
 	case strings.HasPrefix(arg, "@"):
-		b, err := os.ReadFile(arg[1:])
+		b, err := os.ReadFile(expandHome(arg[1:]))
+		if errors.Is(err, fs.ErrNotExist) {
+			return "", fmt.Errorf("reading the body: %w (to send text that starts with @, pipe it in with -)", err)
+		}
 		if err != nil {
 			return "", fmt.Errorf("reading the body: %w", err)
 		}
@@ -195,6 +200,21 @@ func resolveBody(arg string, stdin io.Reader) (string, error) {
 	}
 
 	return body, nil
+}
+
+// expandHome turns a leading ~/ into the home directory. The shell does that for a word that
+// starts with ~, but not for the part after an @.
+func expandHome(path string) string {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+
+	return filepath.Join(home, path[1:])
 }
 
 // describeBody names where a body came from, for error messages.

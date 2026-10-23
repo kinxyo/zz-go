@@ -92,7 +92,7 @@ The last argument is the body. It can be given three ways:
 | You type | The body is |
 |----------|-------------|
 | `'{"a":1}'` | the text you typed |
-| `@body.json` | the contents of that file |
+| `@body.json` | the contents of that file (`@~/body.json` works too) |
 | `-` | whatever is on stdin |
 
 A JSON body gets `Content-Type: application/json` automatically. To avoid quoting JSON in the
@@ -117,7 +117,9 @@ zz -H "Content-Type: application/x-www-form-urlencoded" post /login 'user=alice&
 zz -H "Content-Type: application/vnd.api+json" post /things '{"data":{}}'
 ```
 
-An empty body (an empty file, empty stdin, or `""`) is an error.
+An empty body (an empty file, empty stdin, or `""`) is an error. A body that is text starting with
+`@` would be read as a file name, so send it through stdin instead:
+`printf '@alice hello' | zz -H "Content-Type: text/plain" post /x -`.
 
 ### Flags
 

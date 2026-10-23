@@ -582,3 +582,64 @@ func TestIsJSONType(t *testing.T) {
 		}
 	}
 }
+
+func TestExpandHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)        // unix
+	t.Setenv("USERPROFILE", home) // windows
+
+	cases := []struct{ in, want string }{
+		{"~/body.json", filepath.Join(home, "body.json")},
+		{"~/a/b.json", filepath.Join(home, "a", "b.json")},
+		{"~", home},
+		{"body.json", "body.json"},
+		{"./body.json", "./body.json"},
+		{"/abs/body.json", "/abs/body.json"},
+		{"~other/body.json", "~other/body.json"}, // another user's home isn't supported
+		{"a/~/b", "a/~/b"},
+	}
+
+	for _, c := range cases {
+		if got := expandHome(c.in); got != c.want {
+			t.Errorf("expandHome(%q) = %q; want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestBodyFileUnderHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+
+	if err := os.WriteFile(filepath.Join(home, "body.json"), []byte(`{"a":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := resolveBody("@~/body.json", strings.NewReader(""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != `{"a":1}` {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestMissingBodyFileSuggestsStdin(t *testing.T) {
+	_, err := resolveBody("@alice hello", strings.NewReader(""))
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if !strings.Contains(err.Error(), "pipe it in with -") {
+		t.Errorf("error %q should explain how to send text that starts with @", err)
+	}
+
+	// any other read error doesn't get that hint
+	dir := t.TempDir()
+	_, err = resolveBody("@"+dir, strings.NewReader("")) // a directory can't be read as a body
+	if err == nil {
+		t.Fatal("want an error reading a directory")
+	}
+	if strings.Contains(err.Error(), "pipe it in") {
+		t.Errorf("error %q should not carry the hint", err)
+	}
+}
