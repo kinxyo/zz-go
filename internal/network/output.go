@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"sort"
+	"strings"
+	"unicode/utf8"
 
 	"github.com/kinxyo/zz-go/internal/terminal"
 )
@@ -18,7 +20,8 @@ type PrintOpts struct {
 }
 
 // Print writes the metadata to stderr and the body to stdout, so the body can be piped.
-func (r *Result) Print(o PrintOpts) {
+// It returns false when it held the body back: a binary body is not written to a terminal.
+func (r *Result) Print(o PrintOpts) bool {
 	if o.URL {
 		terminal.LogFC(terminal.TextBold, "%s %s\n", r.Method, r.URL)
 	}
@@ -46,7 +49,17 @@ func (r *Result) Print(o PrintOpts) {
 	}
 
 	if len(r.Body) == 0 {
-		return
+		return true
+	}
+
+	if terminal.StdoutIsTerminal() && looksBinary(r.Body, r.Header.Get("Content-Type")) {
+		contentType := r.Header.Get("Content-Type")
+		if contentType == "" {
+			contentType = "no Content-Type"
+		}
+
+		terminal.LogFC(terminal.TextYellow, "binary response (%d bytes, %s) not shown on a terminal: redirect it to a file (zz ... > out), or pipe it through cat to see it anyway\n", len(r.Body), contentType)
+		return false
 	}
 
 	// blank line between the metadata and the body
@@ -58,7 +71,7 @@ func (r *Result) Print(o PrintOpts) {
 		var pretty bytes.Buffer
 		if err := json.Indent(&pretty, r.Body, "", "  "); err == nil {
 			terminal.Print(pretty.String())
-			return
+			return true
 		}
 	}
 
@@ -69,6 +82,22 @@ func (r *Result) Print(o PrintOpts) {
 	if r.Body[len(r.Body)-1] != '\n' && terminal.StdoutIsTerminal() {
 		terminal.Print()
 	}
+
+	return true
+}
+
+// looksBinary reports whether a body would mess up a terminal: it has a NUL byte, or it isn't valid
+// UTF-8 and the server didn't say it is text (a Latin-1 page sent as text/html is still text).
+func looksBinary(body []byte, contentType string) bool {
+	if bytes.IndexByte(body, 0) >= 0 {
+		return true
+	}
+
+	if utf8.Valid(body) {
+		return false
+	}
+
+	return !strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "text/")
 }
 
 func statusColor(code int) terminal.TextFmt {

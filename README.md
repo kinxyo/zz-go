@@ -209,6 +209,9 @@ read, zz prints a warning and uses the defaults.
 - The body goes to **stdout**, exactly as received. On a terminal zz ends the last line with a
   newline if the body doesn't, so your prompt starts on its own line; piped or redirected output
   is never changed. The URL, time, status, response headers and warnings go to **stderr**.
+- A binary response (a body with a NUL byte, or that isn't text) is not printed to a terminal,
+  because it would garble it. zz says so, shows the size and `Content-Type`, and exits with status
+  23. Redirect it (`zz /logo.png > logo.png`) or pipe it (`zz /logo.png | cat`) to get the bytes.
 - Response headers (`-i`) are listed alphabetically, with names in Go's standard form
   (`X-Request-Id`, whatever spelling the server used). zz can't show the server's original order
   or capitalization.
