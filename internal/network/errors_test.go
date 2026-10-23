@@ -41,7 +41,7 @@ func TestExplain(t *testing.T) {
 		{
 			"timeout",
 			&url.Error{Op: "Get", URL: "http://h:1/x", Err: os.ErrDeadlineExceeded},
-			"request to h:1 timed out",
+			"request to h:1 timed out after 30s",
 		},
 	}
 

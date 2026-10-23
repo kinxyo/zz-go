@@ -40,7 +40,7 @@ func explain(err error, host string) error {
 	case errors.As(err, &certErr):
 		return friendly("TLS certificate for %s was not accepted: %v", host, certErr.Err)
 	case errors.As(err, &netErr) && netErr.Timeout():
-		return friendly("request to %s timed out", host)
+		return friendly("request to %s timed out after %s", host, requestTimeout)
 	}
 
 	return err

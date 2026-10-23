@@ -7,6 +7,9 @@ import (
 	"time"
 )
 
+// requestTimeout covers the whole request, including reading the body.
+var requestTimeout = 30 * time.Second
+
 type Result struct {
 	Method     string
 	URL        string
@@ -33,7 +36,7 @@ func CURL(method string, url string, headers http.Header, payload string) (*Resu
 		}
 	}
 
-	resp, err := (&http.Client{}).Do(req)
+	resp, err := (&http.Client{Timeout: requestTimeout}).Do(req)
 	if err != nil {
 		return nil, explain(err, req.URL.Host)
 	}
@@ -41,7 +44,7 @@ func CURL(method string, url string, headers http.Header, payload string) (*Resu
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, err
+		return nil, explain(err, req.URL.Host)
 	}
 
 	// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

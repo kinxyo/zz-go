@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 // seen is what the test server received.
@@ -145,5 +146,57 @@ func TestCURLBadURL(t *testing.T) {
 func TestCURLBadMethod(t *testing.T) {
 	if _, err := CURL("BAD METHOD", "http://127.0.0.1:1/", nil, ""); err == nil {
 		t.Error("want an error for an invalid method")
+	}
+}
+
+// withTimeout makes the timeout short for one test.
+func withTimeout(t *testing.T, d time.Duration) {
+	t.Helper()
+
+	old := requestTimeout
+	requestTimeout = d
+	t.Cleanup(func() { requestTimeout = old })
+}
+
+func TestCURLTimesOutWaitingForHeaders(t *testing.T) {
+	withTimeout(t, 50*time.Millisecond)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(300 * time.Millisecond)
+	}))
+	defer srv.Close()
+
+	_, err := CURL("GET", srv.URL, nil, "")
+	if err == nil {
+		t.Fatal("want a timeout error")
+	}
+	if !strings.Contains(err.Error(), "timed out after 50ms") {
+		t.Errorf("error = %q; want the friendly timeout message", err)
+	}
+}
+
+func TestCURLTimesOutReadingTheBody(t *testing.T) {
+	withTimeout(t, 50*time.Millisecond)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, "start")
+		w.(http.Flusher).Flush() // headers and the first bytes arrive in time
+		time.Sleep(300 * time.Millisecond)
+		io.WriteString(w, "end")
+	}))
+	defer srv.Close()
+
+	_, err := CURL("GET", srv.URL, nil, "")
+	if err == nil {
+		t.Fatal("want a timeout error")
+	}
+	if !strings.Contains(err.Error(), "timed out after 50ms") {
+		t.Errorf("error = %q; want the friendly timeout message", err)
+	}
+}
+
+func TestCURLDefaultTimeout(t *testing.T) {
+	if requestTimeout != 30*time.Second {
+		t.Errorf("default timeout = %v; want 30s", requestTimeout)
 	}
 }
