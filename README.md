@@ -230,7 +230,7 @@ go build -ldflags "-X main.version=1.2.3" -o zz ./cmd/zz
 ```
 
 Every push to `main` runs the tests, builds the binaries above and publishes them as a release
-tagged `v1.0.<run number>`.
+tagged `v1.2.<run number>`.
 
 ## License
 

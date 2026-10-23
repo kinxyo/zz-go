@@ -1,7 +1,7 @@
 name: release
 
 # Every push to main tests the code, builds the binaries and publishes them as a
-# GitHub Release tagged v1.0.<run number>. Other branches never trigger this.
+# GitHub Release tagged v1.2.<run number>. Other branches never trigger this.
 # It can also be started by hand from the Actions tab (workflow_dispatch).
 on:
   push:
@@ -36,11 +36,11 @@ jobs:
           for t in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
             os=${t%/*}; arch=${t#*/}
             ext=''; [ "$os" = windows ] && ext='.exe'
-            GOOS=$os GOARCH=$arch go build -trimpath -ldflags="-s -w -X main.version=1.0.${{ github.run_number }}" -o "dist/zz-$os-$arch$ext" ./cmd/zz
+            GOOS=$os GOARCH=$arch go build -trimpath -ldflags="-s -w -X main.version=1.2.${{ github.run_number }}" -o "dist/zz-$os-$arch$ext" ./cmd/zz
           done
           (cd dist && sha256sum * > SHA256SUMS)
 
       - name: Publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "v1.0.${{ github.run_number }}" dist/* --target "$GITHUB_SHA" --generate-notes
+        run: gh release create "v1.2.${{ github.run_number }}" dist/* --target "$GITHUB_SHA" --generate-notes
