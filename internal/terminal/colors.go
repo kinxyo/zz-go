@@ -28,12 +28,18 @@ func useColor(w io.Writer) bool {
 	}
 
 	f, ok := w.(*os.File)
-	if !ok {
-		return false
-	}
+	return ok && isTerminal(f)
+}
 
+// isTerminal reports whether f is a terminal rather than a pipe or a file.
+func isTerminal(f *os.File) bool {
 	info, err := f.Stat()
 	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+// StdoutIsTerminal reports whether stdout is a terminal.
+func StdoutIsTerminal() bool {
+	return isTerminal(os.Stdout)
 }
 
 func colorFmt(std io.Writer, color TextFmt, format string, a ...any) {

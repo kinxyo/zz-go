@@ -30,7 +30,7 @@ func buildWithStdin(args []string, flags *terminal.Flags, settings config.Settin
 
 // flagsFor builds only the flags extract and resolve read.
 func flagsFor(forceHTTP bool, headers ...string) *terminal.Flags {
-	return &terminal.Flags{ForceHttp: &forceHTTP, Headers: &headers}
+	return &terminal.Flags{ForceHttp: &forceHTTP, RequestHeaders: &headers}
 }
 
 func TestExtract(t *testing.T) {

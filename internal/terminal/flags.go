@@ -7,16 +7,16 @@ import (
 )
 
 type Flags struct {
-	Verbose      *bool
-	PrintURL     *bool
-	PrintTime    *bool
-	PrintStatus  *bool
-	PrintHeaders *bool
-	Pretty       *bool
-	Fail         *bool
-	ForceHttp    *bool
-	Help         *bool
-	Headers      *[]string
+	Verbose        *bool
+	PrintURL       *bool
+	PrintTime      *bool
+	PrintStatus    *bool
+	PrintHeaders   *bool
+	Pretty         *bool
+	Fail           *bool
+	ForceHttp      *bool
+	Help           *bool
+	RequestHeaders *[]string
 }
 
 func newFlag() Flags {
@@ -34,16 +34,16 @@ func newFlag() Flags {
 	flag.BoolVar(&help, "help", false, "show help")
 
 	f := Flags{
-		Verbose:      flag.Bool("v", false, "show the url, time, status and response headers"),
-		PrintURL:     flag.Bool("u", false, "show the url"),
-		PrintTime:    flag.Bool("t", false, "show the time taken"),
-		PrintStatus:  flag.Bool("s", false, "show the status"),
-		PrintHeaders: flag.Bool("i", false, "show the response headers"),
-		Pretty:       flag.Bool("p", false, "pretty-print a JSON body"),
-		Fail:         flag.Bool("f", false, "exit with status 22 if the response is 4xx or 5xx"),
-		ForceHttp:    flag.Bool("d", false, "use http:// for urls typed without a scheme"),
-		Help:         &help,
-		Headers:      &headers,
+		Verbose:        flag.Bool("v", false, "show the url, time, status and response headers"),
+		PrintURL:       flag.Bool("u", false, "show the url"),
+		PrintTime:      flag.Bool("t", false, "show the time taken"),
+		PrintStatus:    flag.Bool("s", false, "show the status"),
+		PrintHeaders:   flag.Bool("i", false, "show the response headers"),
+		Pretty:         flag.Bool("p", false, "pretty-print a JSON body"),
+		Fail:           flag.Bool("f", false, "exit with status 22 if the response is 4xx or 5xx"),
+		ForceHttp:      flag.Bool("d", false, "use http:// for urls typed without a scheme"),
+		Help:           &help,
+		RequestHeaders: &headers,
 	}
 
 	return f

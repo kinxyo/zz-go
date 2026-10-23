@@ -127,7 +127,7 @@ func (r *request) resolve(flags *terminal.Flags, userAgent string, stdin io.Read
 		r.payload = body
 	}
 
-	h, err := buildHeaders(r.payload, *flags.Headers, userAgent)
+	h, err := buildHeaders(r.payload, *flags.RequestHeaders, userAgent)
 	if err != nil {
 		return err
 	}

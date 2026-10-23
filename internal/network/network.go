@@ -13,6 +13,7 @@ var requestTimeout = 30 * time.Second
 type Result struct {
 	Method     string
 	URL        string
+	Proto      string // "HTTP/1.1"
 	Status     string // "200 OK"
 	StatusCode int
 	Header     http.Header
@@ -53,6 +54,7 @@ func CURL(method string, url string, headers http.Header, payload string) (*Resu
 	return &Result{
 		Method:     method,
 		URL:        url,
+		Proto:      resp.Proto,
 		Status:     resp.Status,
 		StatusCode: resp.StatusCode,
 		Header:     resp.Header,

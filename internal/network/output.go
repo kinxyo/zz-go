@@ -28,7 +28,7 @@ func (r *Result) Print(o PrintOpts) {
 	}
 
 	if o.Status {
-		terminal.LogFC(statusColor(r.StatusCode), "%s\n", r.Status)
+		terminal.LogFC(statusColor(r.StatusCode), "%s %s\n", r.Proto, r.Status)
 	}
 
 	if o.Headers {
@@ -45,13 +45,13 @@ func (r *Result) Print(o PrintOpts) {
 		}
 	}
 
+	if len(r.Body) == 0 {
+		return
+	}
+
 	// blank line between the metadata and the body
 	if o.URL || o.Time || o.Status || o.Headers {
 		terminal.Log()
-	}
-
-	if len(r.Body) == 0 {
-		return
 	}
 
 	if o.Pretty {
@@ -63,6 +63,12 @@ func (r *Result) Print(o PrintOpts) {
 	}
 
 	terminal.PrintF("%s", r.Body)
+
+	// piped or redirected output stays exactly as received; on a terminal, end the line
+	// so the prompt doesn't start in the middle of it
+	if r.Body[len(r.Body)-1] != '\n' && terminal.StdoutIsTerminal() {
+		terminal.Print()
+	}
 }
 
 func statusColor(code int) terminal.TextFmt {

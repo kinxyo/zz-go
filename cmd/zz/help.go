@@ -58,7 +58,7 @@ var helpSections = []helpSection{
 		rows: []helpRow{
 			{`-H "Key: Value"`, "add a header (repeatable)"},
 			{"-v", "show url, time, status and response headers"},
-			{"-u  -t  -s  -i", "show only the url / time / status / headers"},
+			{"-u  -t  -s  -i", "pick what to show: url, time, status, headers"},
 			{"-p", "pretty-print a JSON body"},
 			{"-f", "exit 22 if the response is 4xx or 5xx"},
 			{"-d", "use http:// for urls typed without a scheme"},

@@ -15,7 +15,7 @@ zz -v httpbin.org/json                      # show the URL, time, status and hea
 
 ```sh
 curl -s -H 'Content-Type: application/json' -d '{"name":"Alice"}' http://127.0.0.1:8000/users | jq
-zz post /users '{"name":"Alice"}'
+zz -p post /users '{"name":"Alice"}'
 ```
 
 - **Short.** Methods have short forms (`p` for POST), the method is optional (GET), and a path
@@ -197,8 +197,12 @@ read, zz prints a warning and uses the defaults.
 
 ## Output and errors
 
-- The body goes to **stdout**, exactly as received (no newline is added). The URL, time, status,
-  response headers and warnings go to **stderr**.
+- The body goes to **stdout**, exactly as received. On a terminal zz ends the last line with a
+  newline if the body doesn't, so your prompt starts on its own line; piped or redirected output
+  is never changed. The URL, time, status, response headers and warnings go to **stderr**.
+- Response headers (`-i`) are listed alphabetically, with names in Go's standard form
+  (`X-Request-Id`, whatever spelling the server used). zz can't show the server's original order
+  or capitalization.
 - A response with a 4xx or 5xx status is still a response: the body is printed and zz exits with
   status 0, unless you pass `-f`, which exits with 22. A request that fails (connection refused,
   unknown host, bad TLS certificate, a timeout, a malformed argument) exits with status 1, so a

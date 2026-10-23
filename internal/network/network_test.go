@@ -64,6 +64,9 @@ func TestCURLSendsRequest(t *testing.T) {
 	if res.Method != "POST" || res.URL != srv.URL+"/items" {
 		t.Errorf("Result has method %q, url %q", res.Method, res.URL)
 	}
+	if res.Proto != "HTTP/1.1" {
+		t.Errorf("Result has proto %q", res.Proto)
+	}
 	if res.StatusCode != 201 || res.Status != "201 Created" {
 		t.Errorf("Result has status %d %q", res.StatusCode, res.Status)
 	}
