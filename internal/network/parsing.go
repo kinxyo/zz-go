@@ -28,8 +28,8 @@ func MakeURL(path string, base string, forceHTTP bool) string {
 	// Example:
 	// 1. zz /api/users (local, from the config)
 	// 2. zz httpbin.org/json (https)
-	// 3. zz -h httpbin.org/json (http)
-	// A URL that already has a scheme is left alone, even with -h.
+	// 3. zz -d httpbin.org/json (http)
+	// A URL that already has a scheme is left alone, even with -d.
 
 	if strings.HasPrefix(path, "/") {
 		return base + path

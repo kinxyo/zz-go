@@ -12,8 +12,8 @@ type Flags struct {
 	PrintTime   *bool
 	PrintStatus *bool
 	NoFormat    *bool
-	ForceSeq    *bool
 	ForceHttp   *bool
+	Help        *bool
 	Headers     *[]string
 }
 
@@ -27,14 +27,18 @@ func newFlag() Flags {
 		return nil
 	})
 
+	var help bool
+	flag.BoolVar(&help, "h", false, "show help")
+	flag.BoolVar(&help, "help", false, "show help")
+
 	f := Flags{
-		Verbose:     flag.Bool("v", false, "logging all meta info to terminal"),
-		PrintURL:    flag.Bool("u", false, "log url to terminal"),
-		PrintTime:   flag.Bool("t", false, "log time to terminal"),
-		PrintStatus: flag.Bool("s", false, "log status to terminal"),
-		NoFormat:    flag.Bool("n", false, "No pretty json"),
-		ForceSeq:    flag.Bool("q", false, "force to run sequentially"),
-		ForceHttp:   flag.Bool("h", false, "force http"),
+		Verbose:     flag.Bool("v", false, "show the url, time and status"),
+		PrintURL:    flag.Bool("u", false, "show the url"),
+		PrintTime:   flag.Bool("t", false, "show the time taken"),
+		PrintStatus: flag.Bool("s", false, "show the status"),
+		NoFormat:    flag.Bool("n", false, "print the body as received"),
+		ForceHttp:   flag.Bool("d", false, "use http:// for urls typed without a scheme"),
+		Help:        &help,
 		Headers:     &headers,
 	}
 

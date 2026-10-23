@@ -29,6 +29,11 @@ import (
 func main() {
 	t := terminal.GetArgs()
 
+	if *t.Flags.Help {
+		printHelp()
+		return
+	}
+
 	if len(t.Args) == 0 {
 		tui.Run()
 		return
@@ -44,7 +49,7 @@ func main() {
 		return
 	}
 
-	if t.Args[0] == "help" || t.Args[0] == "-h" {
+	if t.Args[0] == "help" {
 		printHelp()
 		return
 	}

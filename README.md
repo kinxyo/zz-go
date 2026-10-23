@@ -68,7 +68,7 @@ zz [flags] [method] <url> ['<json body>']
 |--------------------------|-------------------------------------------|
 | `/users`                 | `http://127.0.0.1:8000/users` (see [Config](#config)) |
 | `httpbin.org/json`       | `https://httpbin.org/json`                |
-| `-h localhost:3000/x`    | `http://localhost:3000/x`                 |
+| `-d localhost:3000/x`    | `http://localhost:3000/x`                 |
 | `https://api.example.com/x` | used as typed                          |
 
 A query string is part of the URL: `zz '/search?q=go&page=2'`. Quote it, or the shell treats `&` as
@@ -98,7 +98,7 @@ zz -H "Content-Type: application/vnd.api+json" post /things '{"data":{}}'
 | `-t` | Show the time the request took. |
 | `-s` | Show the status, colored by class (2xx green, 3xx cyan, 4xx yellow, 5xx red). |
 | `-n` | Print the body exactly as received, with no pretty-printing. |
-| `-h` | Use `http://` for a URL typed without a scheme. |
+| `-d` | Use `http://` for a URL typed without a scheme. |
 
 Colors appear only when the output is a terminal; they are off when piped or redirected, or when
 `NO_COLOR` is set.
@@ -106,8 +106,44 @@ Colors appear only when the output is a terminal; they are off when piped or red
 ### Other commands
 
 ```sh
-zz help      # usage
+zz help      # usage (also zz -h)
 zz version   # the version
+```
+
+## Examples
+
+Basic requests:
+
+```sh
+zz httpbin.org/get
+zz -v get https://api.github.com/users/octocat
+```
+
+With headers (flags go first):
+
+```sh
+zz -H "Authorization: Bearer $TOKEN" /api
+zz -H "X-Api-Key: abc" -H "Accept: application/json" /items
+```
+
+POST with a JSON body:
+
+```sh
+zz post /msg '{"message":"Hello!"}'
+zz -H "X-Api-Key: abc" post /users '{"name":"Alice"}'
+```
+
+A local server over plain http:
+
+```sh
+zz /api                         # http://127.0.0.1:8000/api
+zz -d localhost:3000/health     # http://localhost:3000/health
+```
+
+Save the raw body:
+
+```sh
+zz -n /file > out.json
 ```
 
 ## Config
@@ -130,13 +166,13 @@ read, zz prints a warning and uses the defaults.
 - The body goes to **stdout**. The URL, time and status (and warnings) go to **stderr**.
 - A response with a 4xx or 5xx status is still a response: the body is printed and zz exits with
   status 0. Only a failed request (connection refused, unknown host, bad TLS certificate, a
-  malformed argument) exits with status 1.
+  timeout, a malformed argument) exits with status 1.
+- A request times out after 30 seconds, counting the time spent reading the body.
 
 ## Not yet
 
 - `zz run [file]` reads a `.zz` collection file and prints its tokens. It does not send the requests.
 - Running `zz` with no arguments is a placeholder; there is no interactive mode yet.
-- There is no request timeout.
 - Flags after the URL aren't supported.
 
 ## Development

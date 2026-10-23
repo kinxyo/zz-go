@@ -2,80 +2,94 @@ package main
 
 import "github.com/kinxyo/zz-go/internal/terminal"
 
-// printHelp clears the screen and prints the usage text.
-func printHelp() {
-	terminal.Clear()
-	terminal.PrintF("%s", "\n"+logo+"\n                      Version "+version+"\n\n"+body)
+type helpRow struct {
+	left  string // command, flag or example, shown in cyan
+	right string // what it does; empty for a plain list
 }
 
-const logo = `            /$$
-           |__/
-  /$$$$$$$$ /$$  /$$$$$$  /$$$$$$$$  /$$$$$$   /$$$$$$
- |____ /$$/| $$ /$$__  $$|____ /$$/ |____  $$ /$$__  $$
-    /$$$$/ | $$| $$  \ $$   /$$$$/   /$$$$$$$| $$  \ $$
-   /$$__/  | $$| $$  | $$  /$$__/   /$$__  $$| $$  | $$
-  /$$$$$$$$| $$|  $$$$$$$ /$$$$$$$$|  $$$$$$$|  $$$$$$$
- |________/|__/ \____  $$|________/ \_______/ \____  $$
-                /$$  \ $$                     /$$  \ $$
-               |  $$$$$$/                    |  $$$$$$/
-                \______/                      \______/
+type helpSection struct {
+	title string
+	hint  string // dim note after the title
+	width int    // width of the left column
+	rows  []helpRow
+}
 
-        ⚡ A blazing fast HTTP client built with Go ⚡`
+var helpSections = []helpSection{
+	{
+		title: "USAGE",
+		rows: []helpRow{
+			{"zz [flags] [method] <url> ['<json body>']", ""},
+			{"zz <command>", ""},
+		},
+	},
+	{
+		title: "COMMANDS",
+		width: 18,
+		rows: []helpRow{
+			{"help, -h", "show this help"},
+			{"version, v", "show the version"},
+			{"run [file]", "read a .zz collection (requests are not sent yet)"},
+		},
+	},
+	{
+		title: "METHODS",
+		width: 30,
+		rows: []helpRow{
+			{"get post put patch delete", "no method means get"},
+			{"g p pu pa d", "short forms"},
+		},
+	},
+	{
+		title: "FLAGS",
+		hint:  "go before the url",
+		width: 18,
+		rows: []helpRow{
+			{`-H "Key: Value"`, "add a header (repeatable)"},
+			{"-v", "show url, time and status"},
+			{"-u  -t  -s", "show only the url / time / status"},
+			{"-n", "print the body as received"},
+			{"-d", "use http:// for urls typed without a scheme"},
+		},
+	},
+	{
+		title: "URLS",
+		width: 18,
+		rows: []helpRow{
+			{"/users", "http://127.0.0.1:8000/users (host and port from the config)"},
+			{"example.com/x", "https://example.com/x"},
+			{"https://...", "used as typed"},
+		},
+	},
+	{
+		title: "CONFIG",
+		rows: []helpRow{
+			{`~/.config/zz/setting.json  {"host": "127.0.0.1", "port": 8000}`, ""},
+		},
+	},
+}
 
-const body = `  DESCRIPTION
-    A fast and elegant HTTP client for API testing and development.
+// printHelp prints the usage text. It doesn't clear the screen, so it reads like any other command.
+func printHelp() {
+	terminal.PrintFC(terminal.TextBold, "zigzag")
+	terminal.PrintF(" (zz) %s  quick HTTP requests from the terminal\n", version)
 
-  USAGE
-    zz [FLAGS] [METHOD] <URL> ['<json body>']
-    zz <COMMAND>
+	for _, s := range helpSections {
+		terminal.PrintF("\n")
+		terminal.PrintFC(terminal.TextBold, "%s", s.title)
+		if s.hint != "" {
+			terminal.PrintFC(terminal.TextDim, "  %s", s.hint)
+		}
+		terminal.PrintF("\n")
 
-  COMMANDS
-    ⚉ help               Show this help message
-    ⚉ version, v         Show the version
-    ⚉ run [file]         Read a .zz collection file (prints its tokens; requests are not sent yet)
-    ⚉ (no args)          Interactive TUI (not built yet)
-
-  METHODS
-    get, post, put, patch, delete
-    Short forms: g, p (or po), pu, pa, d. Case insensitive. Defaults to GET if omitted.
-
-  FLAGS (go before the URL)
-    ⚉ -H "Key: Value"    Add a request header (repeatable)
-    ⚉ -v                 Show the URL, time and status (same as -u -t -s)
-    ⚉ -u                 Show the URL
-    ⚉ -t                 Show the time taken
-    ⚉ -s                 Show the status
-    ⚉ -n                 Print the body as received (no JSON pretty-printing)
-    ⚉ -h                 Use http:// for URLs typed without a scheme
-
-  EXAMPLES
-    Basic requests:
-      zz httpbin.org/get
-      zz -v get https://api.github.com/users/octocat
-
-    With headers (flags go first):
-      zz -H "Authorization: Bearer token" /api
-
-    POST with a JSON body:
-      zz post /msg '{"message":"Hello!"}'
-      zz -H "X-Api-Key: abc" post /users '{"name":"Alice"}'
-
-    Local server over plain http:
-      zz /api                        # http://127.0.0.1:8000/api
-      zz -h localhost:3000/health    # http://localhost:3000/health
-
-    Save the raw body:
-      zz -n /file > out.json
-
-  NOTES
-    ⚉ /path goes to the host and port in ~/.config/zz/setting.json (default 127.0.0.1:8000)
-    ⚉ URLs typed without a scheme use https://
-    ⚉ A body must be valid JSON; Content-Type: application/json is added unless you pass your own -H
-    ⚉ Flags go before the URL: zz -v /users, not zz /users -v
-    ⚉ The URL, time and status go to stderr and the body to stdout, so output can be piped
-
-  MORE INFO
-    Repository: https://github.com/kinxyo/zz-go
-    Issues:     https://github.com/kinxyo/zz-go/issues
-
-`
+		for _, r := range s.rows {
+			terminal.PrintF("  ")
+			if r.right == "" {
+				terminal.PrintFC(terminal.TextCyan, "%s", r.left)
+			} else {
+				terminal.PrintFC(terminal.TextCyan, "%-*s", s.width, r.left)
+				terminal.PrintF("  %s", r.right)
+			}
+			terminal.PrintF("\n")
+		}
+	}
+}
