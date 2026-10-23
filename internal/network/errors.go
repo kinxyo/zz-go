@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"syscall"
+	"time"
 )
 
 // The kinds of failure CURL reports. Check for them with errors.Is; the cli turns each into its
@@ -33,8 +34,9 @@ func (e *friendlyError) Unwrap() error        { return e.err }
 func (e *friendlyError) Is(target error) bool { return target == e.kind }
 
 // explain turns the raw errors from net/http into short messages. host is the
-// "host:port" that was requested. Errors it doesn't recognise are returned as they are.
-func explain(err error, host string) error {
+// "host:port" that was requested, timeout the limit it ran with. Errors it doesn't
+// recognise are returned as they are.
+func explain(err error, host string, timeout time.Duration) error {
 	friendly := func(kind error, format string, a ...any) error {
 		return &friendlyError{msg: fmt.Sprintf(format, a...), kind: kind, err: err}
 	}
@@ -53,7 +55,10 @@ func explain(err error, host string) error {
 	case errors.As(err, &certErr):
 		return friendly(ErrCertificate, "TLS certificate for %s was not accepted: %v", host, certErr.Err)
 	case errors.As(err, &netErr) && netErr.Timeout():
-		return friendly(ErrTimeout, "request to %s timed out after %s", host, requestTimeout)
+		if timeout > 0 {
+			return friendly(ErrTimeout, "request to %s timed out after %s", host, timeout)
+		}
+		return friendly(ErrTimeout, "request to %s timed out", host)
 	}
 
 	return err

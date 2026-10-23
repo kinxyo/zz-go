@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/kinxyo/zz-go/internal/config"
 	"github.com/kinxyo/zz-go/internal/network"
@@ -38,7 +39,13 @@ func Run(args []string, flags *terminal.Flags, env Env) {
 		terminal.FatalWith(exitUsage, "%s\n", err)
 	}
 
-	res, err := network.CURL(r.method, r.url, r.headers, r.payload)
+	res, err := network.CURL(network.Request{
+		Method:  r.method,
+		URL:     r.url,
+		Header:  r.headers,
+		Body:    r.payload,
+		Timeout: 30 * time.Second,
+	})
 	if err != nil {
 		terminal.FatalWith(exitCode(err), "%s\n", err)
 	}

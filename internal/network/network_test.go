@@ -43,7 +43,7 @@ func TestCURLSendsRequest(t *testing.T) {
 	headers.Set("Authorization", "Bearer tok")
 	headers.Set("Content-Type", "application/json")
 
-	res, err := CURL("POST", srv.URL+"/items", headers, `{"a":1}`)
+	res, err := CURL(Request{Method: "POST", URL: srv.URL + "/items", Header: headers, Body: `{"a":1}`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestCURLSendsRequest(t *testing.T) {
 func TestCURLWithoutHeadersOrBody(t *testing.T) {
 	srv, got := newServer(t, http.StatusOK, "hi")
 
-	res, err := CURL("GET", srv.URL, nil, "")
+	res, err := CURL(Request{Method: "GET", URL: srv.URL})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestCURLEmptyUserAgentSendsNone(t *testing.T) {
 	srv, got := newServer(t, http.StatusOK, "")
 
 	headers := http.Header{"User-Agent": {""}}
-	if _, err := CURL("GET", srv.URL, headers, ""); err != nil {
+	if _, err := CURL(Request{Method: "GET", URL: srv.URL, Header: headers}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -118,7 +118,7 @@ func TestCURLEmptyUserAgentSendsNone(t *testing.T) {
 func TestCURLErrorStatusIsNotAnError(t *testing.T) {
 	srv, _ := newServer(t, http.StatusNotFound, "nope")
 
-	res, err := CURL("GET", srv.URL, nil, "")
+	res, err := CURL(Request{Method: "GET", URL: srv.URL})
 	if err != nil {
 		t.Fatalf("a 404 is a response, not an error: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestCURLSetsEachHeaderValue(t *testing.T) {
 	srv, got := newServer(t, http.StatusOK, "")
 
 	headers := http.Header{"Accept": {"text/plain", "application/json"}}
-	if _, err := CURL("GET", srv.URL, headers, ""); err != nil {
+	if _, err := CURL(Request{Method: "GET", URL: srv.URL, Header: headers}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,7 +145,7 @@ func TestCURLConnectionRefusedIsFriendly(t *testing.T) {
 	url := srv.URL
 	srv.Close() // nothing listens there any more
 
-	_, err := CURL("GET", url, nil, "")
+	_, err := CURL(Request{Method: "GET", URL: url})
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -158,7 +158,7 @@ func TestCURLConnectionRefusedIsFriendly(t *testing.T) {
 }
 
 func TestCURLBadURL(t *testing.T) {
-	_, err := CURL("GET", "http://[::1", nil, "")
+	_, err := CURL(Request{Method: "GET", URL: "http://[::1"})
 	if err == nil {
 		t.Fatal("want an error for a malformed URL")
 	}
@@ -168,29 +168,19 @@ func TestCURLBadURL(t *testing.T) {
 }
 
 func TestCURLBadMethod(t *testing.T) {
-	if _, err := CURL("BAD METHOD", "http://127.0.0.1:1/", nil, ""); err == nil {
+	if _, err := CURL(Request{Method: "BAD METHOD", URL: "http://127.0.0.1:1/"}); err == nil {
 		t.Error("want an error for an invalid method")
 	}
 }
 
-// withTimeout makes the timeout short for one test.
-func withTimeout(t *testing.T, d time.Duration) {
-	t.Helper()
-
-	old := requestTimeout
-	requestTimeout = d
-	t.Cleanup(func() { requestTimeout = old })
-}
-
 func TestCURLTimesOutWaitingForHeaders(t *testing.T) {
-	withTimeout(t, 50*time.Millisecond)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(300 * time.Millisecond)
 	}))
 	defer srv.Close()
 
-	_, err := CURL("GET", srv.URL, nil, "")
+	_, err := CURL(Request{Method: "GET", URL: srv.URL, Timeout: 50 * time.Millisecond})
 	if err == nil {
 		t.Fatal("want a timeout error")
 	}
@@ -203,7 +193,6 @@ func TestCURLTimesOutWaitingForHeaders(t *testing.T) {
 }
 
 func TestCURLTimesOutReadingTheBody(t *testing.T) {
-	withTimeout(t, 50*time.Millisecond)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, "start")
@@ -213,7 +202,7 @@ func TestCURLTimesOutReadingTheBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := CURL("GET", srv.URL, nil, "")
+	_, err := CURL(Request{Method: "GET", URL: srv.URL, Timeout: 50 * time.Millisecond})
 	if err == nil {
 		t.Fatal("want a timeout error")
 	}
@@ -225,8 +214,19 @@ func TestCURLTimesOutReadingTheBody(t *testing.T) {
 	}
 }
 
-func TestCURLDefaultTimeout(t *testing.T) {
-	if requestTimeout != 30*time.Second {
-		t.Errorf("default timeout = %v; want 30s", requestTimeout)
+func TestCURLNoTimeout(t *testing.T) {
+	// 0 means no limit: a reply that takes longer than a short limit still arrives
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(150 * time.Millisecond)
+		io.WriteString(w, "late")
+	}))
+	defer srv.Close()
+
+	res, err := CURL(Request{Method: "GET", URL: srv.URL, Timeout: 0})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(res.Body) != "late" {
+		t.Errorf("body = %q", res.Body)
 	}
 }

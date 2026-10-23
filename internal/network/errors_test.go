@@ -9,6 +9,7 @@ import (
 	"os"
 	"syscall"
 	"testing"
+	"time"
 )
 
 func TestExplain(t *testing.T) {
@@ -53,7 +54,7 @@ func TestExplain(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := explain(c.err, "h:1")
+			got := explain(c.err, "h:1", 30*time.Second)
 			if got.Error() != c.want {
 				t.Errorf("explain() = %q; want %q", got.Error(), c.want)
 			}
@@ -73,14 +74,14 @@ func TestExplain(t *testing.T) {
 
 func TestExplainKeepsCause(t *testing.T) {
 	err := &url.Error{Op: "Get", URL: "http://h:1/x", Err: &net.OpError{Op: "dial", Err: syscall.ECONNREFUSED}}
-	if got := explain(err, "h:1"); !errors.Is(got, syscall.ECONNREFUSED) {
+	if got := explain(err, "h:1", 30*time.Second); !errors.Is(got, syscall.ECONNREFUSED) {
 		t.Errorf("errors.Is(ECONNREFUSED) = false for %v", got)
 	}
 }
 
 func TestExplainUnknownErrorPassesThrough(t *testing.T) {
 	orig := errors.New("something else")
-	got := explain(orig, "h:1")
+	got := explain(orig, "h:1", 30*time.Second)
 	if got != orig {
 		t.Errorf("explain() = %v; want the same error back", got)
 	}
@@ -88,6 +89,17 @@ func TestExplainUnknownErrorPassesThrough(t *testing.T) {
 		if errors.Is(got, kind) {
 			t.Errorf("an unknown error should have no kind, but is %q", kind)
 		}
+	}
+}
+
+func TestExplainTimeoutWithoutALimit(t *testing.T) {
+	err := &url.Error{Op: "Get", URL: "http://h:1/x", Err: os.ErrDeadlineExceeded}
+	got := explain(err, "h:1", 0)
+	if got.Error() != "request to h:1 timed out" {
+		t.Errorf("explain() = %q", got.Error())
+	}
+	if !errors.Is(got, ErrTimeout) {
+		t.Errorf("errors.Is(got, ErrTimeout) = false")
 	}
 }
 
