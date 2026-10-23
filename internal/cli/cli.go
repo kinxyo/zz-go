@@ -30,6 +30,10 @@ func Run(args []string, flags *terminal.Flags, env Env) {
 		terminal.Fatal("%s\n", err)
 	}
 
+	if r.hasBody && r.bodyArg == "-" && terminal.StdinIsTerminal() {
+		terminal.Log("reading the body from stdin (end it with Ctrl-D)")
+	}
+
 	if err := r.resolve(flags, env.UserAgent, os.Stdin); err != nil {
 		terminal.Fatal("%s\n", err)
 	}
