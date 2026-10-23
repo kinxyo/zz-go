@@ -2,10 +2,12 @@ name: release
 
 # Every push to main tests the code, builds the binaries and publishes them as a
 # GitHub Release tagged v1.0.<run number>. Other branches never trigger this.
+# It can also be started by hand from the Actions tab (workflow_dispatch).
 on:
   push:
     branches: [main]
     paths-ignore: ['**.md']
+  workflow_dispatch:
 
 permissions:
   contents: write
