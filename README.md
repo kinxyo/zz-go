@@ -77,8 +77,11 @@ A query string is part of the URL: `zz '/search?q=go&page=2'`. Quote it, or the 
 
 ### Methods
 
-`get`, `post`, `put`, `patch`, `delete`, in any case, with short forms: `g`, `p` (or `po`), `pu`,
-`pa`, `d`. With no method, the request is a GET.
+`get`, `post`, `put`, `patch`, `delete`, `head` and `options`, in any case, with short forms: `g`,
+`p` (or `po`), `pu`, `pa`, `d`, `he`, `opt` (or `o`). With no method, the request is a GET.
+
+`head` and `options` replies have no body worth reading, so zz always shows their status and
+headers (as if you had passed `-s -i`).
 
 ### Body
 
@@ -100,7 +103,10 @@ zz -H "Content-Type: application/vnd.api+json" post /things '{"data":{}}'
 | `-s` | Show the status, colored by class (2xx green, 3xx cyan, 4xx yellow, 5xx red). |
 | `-i` | Show the response headers. |
 | `-p` | Pretty-print a JSON body. Without it the body is printed exactly as received. |
+| `-f` | Exit with status 22 if the response is a 4xx or 5xx, like `curl --fail`. The body is still printed. |
 | `-d` | Use `http://` for a URL typed without a scheme. |
+
+Requests send `User-Agent: zz/<version>` unless you set your own with `-H`.
 
 Colors appear only when the output is a terminal; they are off when piped or redirected, or when
 `NO_COLOR` is set.
@@ -169,8 +175,13 @@ read, zz prints a warning and uses the defaults.
 - The body goes to **stdout**, exactly as received (no newline is added). The URL, time, status,
   response headers and warnings go to **stderr**.
 - A response with a 4xx or 5xx status is still a response: the body is printed and zz exits with
-  status 0. Only a failed request (connection refused, unknown host, bad TLS certificate, a
-  timeout, a malformed argument) exits with status 1.
+  status 0, unless you pass `-f`, which exits with 22. A request that fails (connection refused,
+  unknown host, bad TLS certificate, a timeout, a malformed argument) exits with status 1, so a
+  script can tell the two apart:
+
+  ```sh
+  until zz -f /health; do sleep 1; done     # wait for the server to come up
+  ```
 - A request times out after 30 seconds, counting the time spent reading the body.
 
 ## Not yet

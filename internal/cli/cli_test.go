@@ -42,7 +42,7 @@ func TestExtract(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := extract(c.args, c.flags, c.settings)
+			got, err := extract(c.args, c.flags, c.settings, "")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -65,13 +65,15 @@ func TestExtractErrors(t *testing.T) {
 		{"text body", []string{"post", "/x", "hello"}, `payload "hello" is not valid JSON`},
 		{"truncated json", []string{"post", "/x", `{"a":`}, `payload "{\"a\":" is not valid JSON`},
 		{"flag after the url", []string{"/x", "-v"}, `"-v" looks like a flag; flags go before the arguments`},
-		{"unknown method then url", []string{"head", "http://x.com/y"}, `unknown method "head" (use get, post, put, patch or delete)`},
-		{"unknown method then path", []string{"options", "/y"}, `unknown method "options" (use get, post, put, patch or delete)`},
+		{"flag after the method", []string{"get", "-v", "/x"}, `"-v" looks like a flag; flags go before the arguments`},
+		{"flag after a short method", []string{"he", "-u", "/x"}, `"-u" looks like a flag; flags go before the arguments`},
+		{"unknown method then url", []string{"trace", "http://x.com/y"}, `unknown method "trace" (use get, post, put, patch, delete, head or options)`},
+		{"unknown method then path", []string{"purge", "/y"}, `unknown method "purge" (use get, post, put, patch, delete, head or options)`},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := extract(c.args, flagsFor(false), local)
+			_, err := extract(c.args, flagsFor(false), local, "")
 			if err == nil {
 				t.Fatalf("want error %q, got none", c.want)
 			}
@@ -83,7 +85,7 @@ func TestExtractErrors(t *testing.T) {
 }
 
 func TestExtractHeaders(t *testing.T) {
-	got, err := extract([]string{"post", "/x", `{"a":1}`}, flagsFor(false, "Authorization: Bearer tok"), local)
+	got, err := extract([]string{"post", "/x", `{"a":1}`}, flagsFor(false, "Authorization: Bearer tok"), local, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +99,7 @@ func TestExtractHeaders(t *testing.T) {
 }
 
 func TestExtractBadHeader(t *testing.T) {
-	if _, err := extract([]string{"/x"}, flagsFor(false, "nocolon"), local); err == nil {
+	if _, err := extract([]string{"/x"}, flagsFor(false, "nocolon"), local, ""); err == nil {
 		t.Error("want an error for a header without a colon")
 	}
 }
@@ -161,7 +163,7 @@ func TestBuildHeaders(t *testing.T) {
 
 	for _, bad := range []string{"nocolon", ": value", "   : value", ""} {
 		t.Run("rejects "+bad, func(t *testing.T) {
-			if _, err := buildHeaders("", []string{bad}); err == nil {
+			if _, err := buildHeaders("", []string{bad}, ""); err == nil {
 				t.Errorf("want an error for %q", bad)
 			}
 		})
@@ -171,7 +173,7 @@ func TestBuildHeaders(t *testing.T) {
 func mustBuild(t *testing.T, payload string, raw ...string) http.Header {
 	t.Helper()
 
-	h, err := buildHeaders(payload, raw)
+	h, err := buildHeaders(payload, raw, "")
 	if err != nil {
 		t.Fatalf("buildHeaders(%q, %q): %v", payload, raw, err)
 	}
@@ -209,25 +211,117 @@ func (m meta) flags() *terminal.Flags {
 
 func TestPrintOpts(t *testing.T) {
 	cases := []struct {
-		name string
-		in   meta
-		want network.PrintOpts
+		name   string
+		in     meta
+		method string
+		want   network.PrintOpts
 	}{
-		{"nothing", meta{}, network.PrintOpts{}},
-		{"-v shows all the metadata", meta{v: true}, network.PrintOpts{URL: true, Time: true, Status: true, Headers: true}},
-		{"-u only", meta{u: true}, network.PrintOpts{URL: true}},
-		{"-t only", meta{t: true}, network.PrintOpts{Time: true}},
-		{"-s only", meta{s: true}, network.PrintOpts{Status: true}},
-		{"-i only", meta{i: true}, network.PrintOpts{Headers: true}},
-		{"-p does not turn on metadata", meta{p: true}, network.PrintOpts{Pretty: true}},
-		{"-v with -p", meta{v: true, p: true}, network.PrintOpts{URL: true, Time: true, Status: true, Headers: true, Pretty: true}},
+		{"nothing", meta{}, "GET", network.PrintOpts{}},
+		{"-v shows all the metadata", meta{v: true}, "GET", network.PrintOpts{URL: true, Time: true, Status: true, Headers: true}},
+		{"-u only", meta{u: true}, "GET", network.PrintOpts{URL: true}},
+		{"-t only", meta{t: true}, "GET", network.PrintOpts{Time: true}},
+		{"-s only", meta{s: true}, "GET", network.PrintOpts{Status: true}},
+		{"-i only", meta{i: true}, "GET", network.PrintOpts{Headers: true}},
+		{"-p does not turn on metadata", meta{p: true}, "GET", network.PrintOpts{Pretty: true}},
+		{"-v with -p", meta{v: true, p: true}, "GET", network.PrintOpts{URL: true, Time: true, Status: true, Headers: true, Pretty: true}},
+		{"POST shows nothing extra", meta{}, "POST", network.PrintOpts{}},
+		{"HEAD shows status and headers", meta{}, "HEAD", network.PrintOpts{Status: true, Headers: true}},
+		{"OPTIONS shows status and headers", meta{}, "OPTIONS", network.PrintOpts{Status: true, Headers: true}},
+		{"HEAD still honours -u", meta{u: true}, "HEAD", network.PrintOpts{URL: true, Status: true, Headers: true}},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			if got := printOpts(c.in.flags()); got != c.want {
+			if got := printOpts(c.in.flags(), c.method); got != c.want {
 				t.Errorf("got %+v; want %+v", got, c.want)
 			}
 		})
 	}
+}
+
+func TestFailed(t *testing.T) {
+	cases := []struct {
+		status int
+		fail   bool
+		want   bool
+	}{
+		{200, true, false},
+		{204, true, false},
+		{301, true, false},
+		{399, true, false},
+		{400, true, true},
+		{404, true, true},
+		{500, true, true},
+		{404, false, false},
+		{500, false, false},
+	}
+
+	for _, c := range cases {
+		if got := failed(c.status, c.fail); got != c.want {
+			t.Errorf("failed(%d, %v) = %v; want %v", c.status, c.fail, got, c.want)
+		}
+	}
+}
+
+func TestExtractEmptyURL(t *testing.T) {
+	for _, args := range [][]string{{""}, {"  "}, {"get", ""}, {"post", "   "}} {
+		_, err := extract(args, flagsFor(false), local, "")
+		if err == nil || err.Error() != "missing URL" {
+			t.Errorf("extract(%q) error = %v; want \"missing URL\"", args, err)
+		}
+	}
+}
+
+func TestExtractNewMethods(t *testing.T) {
+	cases := map[string]string{"head": "HEAD", "he": "HEAD", "options": "OPTIONS", "opt": "OPTIONS", "o": "OPTIONS"}
+
+	for word, want := range cases {
+		got, err := extract([]string{word, "/x"}, flagsFor(false), local, "")
+		if err != nil {
+			t.Errorf("%s: %v", word, err)
+			continue
+		}
+		if got.method != want || got.url != "http://127.0.0.1:8000/x" {
+			t.Errorf("%s: got method=%q url=%q; want %q", word, got.method, got.url, want)
+		}
+	}
+}
+
+func TestUserAgent(t *testing.T) {
+	t.Run("default is set", func(t *testing.T) {
+		h, err := buildHeaders("", nil, "zz/1.2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := h.Get("User-Agent"); got != "zz/1.2" {
+			t.Errorf("User-Agent = %q", got)
+		}
+	})
+
+	t.Run("-H overrides it", func(t *testing.T) {
+		h, err := buildHeaders("", []string{"user-agent: mine/1"}, "zz/1.2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := h["User-Agent"]; len(got) != 1 || got[0] != "mine/1" {
+			t.Errorf("User-Agent = %q; want only mine/1", got)
+		}
+	})
+
+	t.Run("empty default sets nothing", func(t *testing.T) {
+		h, _ := buildHeaders("", nil, "")
+		if _, ok := h["User-Agent"]; ok {
+			t.Errorf("User-Agent present: %v", h)
+		}
+	})
+
+	t.Run("reaches the request through extract", func(t *testing.T) {
+		r, err := extract([]string{"/x"}, flagsFor(false), local, "zz/1.2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := r.headers.Get("User-Agent"); got != "zz/1.2" {
+			t.Errorf("User-Agent = %q", got)
+		}
+	})
 }

@@ -9,6 +9,11 @@ func Exit() {
 	os.Exit(1)
 }
 
+// ExitWith ends the program with the given exit status.
+func ExitWith(code int) {
+	os.Exit(code)
+}
+
 func Clear() {
 	fmt.Print("\x1b[2J\x1b[H")
 }

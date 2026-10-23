@@ -13,6 +13,7 @@ type Flags struct {
 	PrintStatus  *bool
 	PrintHeaders *bool
 	Pretty       *bool
+	Fail         *bool
 	ForceHttp    *bool
 	Help         *bool
 	Headers      *[]string
@@ -39,6 +40,7 @@ func newFlag() Flags {
 		PrintStatus:  flag.Bool("s", false, "show the status"),
 		PrintHeaders: flag.Bool("i", false, "show the response headers"),
 		Pretty:       flag.Bool("p", false, "pretty-print a JSON body"),
+		Fail:         flag.Bool("f", false, "exit with status 22 if the response is 4xx or 5xx"),
 		ForceHttp:    flag.Bool("d", false, "use http:// for urls typed without a scheme"),
 		Help:         &help,
 		Headers:      &headers,

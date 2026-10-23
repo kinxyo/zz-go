@@ -18,6 +18,10 @@ func MatchMethod(m string) (string, bool) {
 		return "PATCH", true
 	case "delete", "d":
 		return "DELETE", true
+	case "head", "he":
+		return "HEAD", true
+	case "options", "opt", "o":
+		return "OPTIONS", true
 	default:
 		return "", false
 	}

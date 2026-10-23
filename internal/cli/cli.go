@@ -12,9 +12,9 @@ import (
 	"github.com/kinxyo/zz-go/internal/terminal"
 )
 
-func Run(args []string, flags *terminal.Flags, settings config.Settings) {
+func Run(args []string, flags *terminal.Flags, settings config.Settings, userAgent string) {
 
-	r, err := extract(args, flags, settings)
+	r, err := extract(args, flags, settings, userAgent)
 	if err != nil {
 		terminal.Fatal("%s\n", err)
 	}
@@ -24,18 +24,33 @@ func Run(args []string, flags *terminal.Flags, settings config.Settings) {
 		terminal.Fatal("%s\n", err)
 	}
 
-	res.Print(printOpts(flags))
+	res.Print(printOpts(flags, r.method))
+
+	if failed(res.StatusCode, *flags.Fail) {
+		terminal.ExitWith(exitHTTPError)
+	}
 }
 
-// printOpts decides what to show. -v turns on all the metadata.
-func printOpts(flags *terminal.Flags) network.PrintOpts {
+// exitHTTPError is what -f exits with for a 4xx or 5xx response, the same as curl.
+// A request that could not be made at all exits with 1.
+const exitHTTPError = 22
+
+// failed reports whether -f should turn this response into a failure.
+func failed(status int, fail bool) bool {
+	return fail && status >= 400
+}
+
+// printOpts decides what to show. -v turns on all the metadata. HEAD and OPTIONS
+// replies have nothing but a status and headers, so those are always shown.
+func printOpts(flags *terminal.Flags, method string) network.PrintOpts {
 	v := *flags.Verbose
+	bodyless := method == "HEAD" || method == "OPTIONS"
 
 	return network.PrintOpts{
 		URL:     v || *flags.PrintURL,
 		Time:    v || *flags.PrintTime,
-		Status:  v || *flags.PrintStatus,
-		Headers: v || *flags.PrintHeaders,
+		Status:  v || bodyless || *flags.PrintStatus,
+		Headers: v || bodyless || *flags.PrintHeaders,
 		Pretty:  *flags.Pretty,
 	}
 }
@@ -50,7 +65,7 @@ type request struct {
 }
 
 // extract builds a request from `[method] <url> ['{...}']` and the flags.
-func extract(args []string, flags *terminal.Flags, settings config.Settings) (request, error) {
+func extract(args []string, flags *terminal.Flags, settings config.Settings, userAgent string) (request, error) {
 
 	r := request{method: "GET"}
 
@@ -62,8 +77,12 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings) (re
 		r.method, args = m, args[1:]
 	}
 
-	if len(args) == 0 {
+	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
 		return r, errors.New("missing URL")
+	}
+
+	if strings.HasPrefix(args[0], "-") {
+		return r, fmt.Errorf("%q looks like a flag; flags go before the arguments", args[0])
 	}
 
 	// zz <url>
@@ -74,7 +93,7 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings) (re
 		if !json.Valid([]byte(args[1])) {
 			// two URLs in a row: the first one was meant to be a method
 			if looksLikeURL(args[1]) {
-				return r, fmt.Errorf("unknown method %q (use get, post, put, patch or delete)", args[0])
+				return r, fmt.Errorf("unknown method %q (use get, post, put, patch, delete, head or options)", args[0])
 			}
 			if strings.HasPrefix(args[1], "-") {
 				return r, fmt.Errorf("%q looks like a flag; flags go before the arguments", args[1])
@@ -84,7 +103,7 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings) (re
 		r.payload = args[1]
 	}
 
-	h, err := buildHeaders(r.payload, *flags.Headers)
+	h, err := buildHeaders(r.payload, *flags.Headers, userAgent)
 	if err != nil {
 		return r, err
 	}
@@ -95,8 +114,12 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings) (re
 
 // buildHeaders layers the headers, lowest priority first: defaults, then the -H flags.
 // Set means a later header replaces an earlier one with the same name.
-func buildHeaders(payload string, raw []string) (http.Header, error) {
+func buildHeaders(payload string, raw []string, userAgent string) (http.Header, error) {
 	h := http.Header{}
+
+	if userAgent != "" {
+		h.Set("User-Agent", userAgent)
+	}
 
 	if payload != "" {
 		h.Set("Content-Type", "application/json")
