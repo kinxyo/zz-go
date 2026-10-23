@@ -24,13 +24,20 @@ func Run(args []string, flags *terminal.Flags, settings config.Settings) {
 		terminal.Fatal("%s\n", err)
 	}
 
+	res.Print(printOpts(flags))
+}
+
+// printOpts decides what to show. -v turns on all the metadata.
+func printOpts(flags *terminal.Flags) network.PrintOpts {
 	v := *flags.Verbose
-	res.Print(network.PrintOpts{
-		URL:    v || *flags.PrintURL,
-		Time:   v || *flags.PrintTime,
-		Status: v || *flags.PrintStatus,
-		Raw:    *flags.NoFormat,
-	})
+
+	return network.PrintOpts{
+		URL:     v || *flags.PrintURL,
+		Time:    v || *flags.PrintTime,
+		Status:  v || *flags.PrintStatus,
+		Headers: v || *flags.PrintHeaders,
+		Pretty:  *flags.Pretty,
+	}
 }
 
 type request struct {

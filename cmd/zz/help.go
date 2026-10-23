@@ -45,9 +45,9 @@ var helpSections = []helpSection{
 		width: 18,
 		rows: []helpRow{
 			{`-H "Key: Value"`, "add a header (repeatable)"},
-			{"-v", "show url, time and status"},
-			{"-u  -t  -s", "show only the url / time / status"},
-			{"-n", "print the body as received"},
+			{"-v", "show url, time, status and response headers"},
+			{"-u  -t  -s  -i", "show only the url / time / status / headers"},
+			{"-p", "pretty-print a JSON body"},
 			{"-d", "use http:// for urls typed without a scheme"},
 		},
 	},

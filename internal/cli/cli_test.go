@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kinxyo/zz-go/internal/config"
+	"github.com/kinxyo/zz-go/internal/network"
 	"github.com/kinxyo/zz-go/internal/terminal"
 )
 
@@ -193,5 +194,40 @@ func TestLooksLikeURL(t *testing.T) {
 		if got := looksLikeURL(in); got != want {
 			t.Errorf("looksLikeURL(%q) = %v; want %v", in, got, want)
 		}
+	}
+}
+
+// meta is the set of output flags, with names, so a test can't mix them up.
+type meta struct{ v, u, t, s, i, p bool }
+
+func (m meta) flags() *terminal.Flags {
+	return &terminal.Flags{
+		Verbose: &m.v, PrintURL: &m.u, PrintTime: &m.t,
+		PrintStatus: &m.s, PrintHeaders: &m.i, Pretty: &m.p,
+	}
+}
+
+func TestPrintOpts(t *testing.T) {
+	cases := []struct {
+		name string
+		in   meta
+		want network.PrintOpts
+	}{
+		{"nothing", meta{}, network.PrintOpts{}},
+		{"-v shows all the metadata", meta{v: true}, network.PrintOpts{URL: true, Time: true, Status: true, Headers: true}},
+		{"-u only", meta{u: true}, network.PrintOpts{URL: true}},
+		{"-t only", meta{t: true}, network.PrintOpts{Time: true}},
+		{"-s only", meta{s: true}, network.PrintOpts{Status: true}},
+		{"-i only", meta{i: true}, network.PrintOpts{Headers: true}},
+		{"-p does not turn on metadata", meta{p: true}, network.PrintOpts{Pretty: true}},
+		{"-v with -p", meta{v: true, p: true}, network.PrintOpts{URL: true, Time: true, Status: true, Headers: true, Pretty: true}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := printOpts(c.in.flags()); got != c.want {
+				t.Errorf("got %+v; want %+v", got, c.want)
+			}
+		})
 	}
 }

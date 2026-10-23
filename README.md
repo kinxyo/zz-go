@@ -6,7 +6,7 @@ A command-line HTTP client built for firing quick requests at an API. The binary
 zz /health                                  # GET http://127.0.0.1:8000/health
 zz post /users '{"name":"Alice"}'           # POST with a JSON body, Content-Type set for you
 zz -H "Authorization: Bearer $TOKEN" /me    # add a header
-zz -v httpbin.org/json                      # show the URL, time and status as well
+zz -v httpbin.org/json                      # show the URL, time, status and headers as well
 ```
 
 ## Why
@@ -20,8 +20,9 @@ zz post /users '{"name":"Alice"}'
 
 - **Short.** Methods have short forms (`p` for POST), the method is optional (GET), and a path
   starting with `/` goes to your local server, so there's no host or port to type.
-- **Readable by default.** JSON responses are pretty-printed. The URL, time and status go to
-  stderr and the body to stdout, so `zz /users | jq` stays clean.
+- **Metadata stays out of the way.** The URL, time, status and response headers go to stderr and
+  the body to stdout, so `zz /users | jq` and `zz /file > out.json` stay clean. `-p` pretty-prints
+  a JSON body when you want to read it.
 - **Plain errors.** Connection refused, unknown host and a wrong `https://` say what happened in
   one line instead of a Go error chain.
 - **One binary.** No runtime, no config needed to start.
@@ -93,11 +94,12 @@ zz -H "Content-Type: application/vnd.api+json" post /things '{"data":{}}'
 | Flag | |
 |------|-|
 | `-H "Key: Value"` | Add a request header. Repeat it for more. A later header with the same name replaces an earlier one. |
-| `-v` | Show the URL, time and status (the same as `-u -t -s`). |
+| `-v` | Show the URL, time, status and response headers (the same as `-u -t -s -i`). |
 | `-u` | Show the URL. |
 | `-t` | Show the time the request took. |
 | `-s` | Show the status, colored by class (2xx green, 3xx cyan, 4xx yellow, 5xx red). |
-| `-n` | Print the body exactly as received, with no pretty-printing. |
+| `-i` | Show the response headers. |
+| `-p` | Pretty-print a JSON body. Without it the body is printed exactly as received. |
 | `-d` | Use `http://` for a URL typed without a scheme. |
 
 Colors appear only when the output is a terminal; they are off when piped or redirected, or when
@@ -140,10 +142,11 @@ zz /api                         # http://127.0.0.1:8000/api
 zz -d localhost:3000/health     # http://localhost:3000/health
 ```
 
-Save the raw body:
+Read a JSON response, or save it exactly as received:
 
 ```sh
-zz -n /file > out.json
+zz -p /users
+zz /file > out.json
 ```
 
 ## Config
@@ -163,7 +166,8 @@ read, zz prints a warning and uses the defaults.
 
 ## Output and errors
 
-- The body goes to **stdout**. The URL, time and status (and warnings) go to **stderr**.
+- The body goes to **stdout**, exactly as received (no newline is added). The URL, time, status,
+  response headers and warnings go to **stderr**.
 - A response with a 4xx or 5xx status is still a response: the body is printed and zz exits with
   status 0. Only a failed request (connection refused, unknown host, bad TLS certificate, a
   timeout, a malformed argument) exits with status 1.

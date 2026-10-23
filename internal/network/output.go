@@ -3,16 +3,18 @@ package network
 import (
 	"bytes"
 	"encoding/json"
+	"sort"
 
 	"github.com/kinxyo/zz-go/internal/terminal"
 )
 
 // PrintOpts picks what Print shows. The body is always shown.
 type PrintOpts struct {
-	URL    bool
-	Time   bool
-	Status bool
-	Raw    bool // body exactly as received: no pretty-printing, no added newline
+	URL     bool
+	Time    bool
+	Status  bool
+	Headers bool // the response headers
+	Pretty  bool // indent a JSON body; otherwise the body is written exactly as received
 }
 
 // Print writes the metadata to stderr and the body to stdout, so the body can be piped.
@@ -29,8 +31,22 @@ func (r *Result) Print(o PrintOpts) {
 		terminal.LogFC(statusColor(r.StatusCode), "%s\n", r.Status)
 	}
 
+	if o.Headers {
+		names := make([]string, 0, len(r.Header))
+		for name := range r.Header {
+			names = append(names, name)
+		}
+		sort.Strings(names)
+
+		for _, name := range names {
+			for _, value := range r.Header[name] {
+				terminal.LogFC(terminal.TextDim, "%s: %s\n", name, value)
+			}
+		}
+	}
+
 	// blank line between the metadata and the body
-	if o.URL || o.Time || o.Status {
+	if o.URL || o.Time || o.Status || o.Headers {
 		terminal.Log()
 	}
 
@@ -38,18 +54,15 @@ func (r *Result) Print(o PrintOpts) {
 		return
 	}
 
-	if o.Raw {
-		terminal.PrintF("%s", r.Body)
-		return
+	if o.Pretty {
+		var pretty bytes.Buffer
+		if err := json.Indent(&pretty, r.Body, "", "  "); err == nil {
+			terminal.Print(pretty.String())
+			return
+		}
 	}
 
-	var pretty bytes.Buffer
-	if err := json.Indent(&pretty, r.Body, "", "  "); err == nil {
-		terminal.Print(pretty.String())
-		return
-	}
-
-	terminal.PrintF("%s\n", r.Body)
+	terminal.PrintF("%s", r.Body)
 }
 
 func statusColor(code int) terminal.TextFmt {
