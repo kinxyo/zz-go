@@ -28,7 +28,8 @@ func CURL(method string, url string, headers http.Header, payload string) (*Resu
 	p := strings.NewReader(payload)
 	req, err := http.NewRequest(method, url, p)
 	if err != nil {
-		return nil, err
+		// a malformed URL: the user's input, not the network
+		return nil, &friendlyError{msg: err.Error(), kind: ErrInvalidRequest, err: err}
 	}
 
 	for k, vv := range headers {

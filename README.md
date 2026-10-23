@@ -216,14 +216,31 @@ read, zz prints a warning and uses the defaults.
   (`X-Request-Id`, whatever spelling the server used). zz can't show the server's original order
   or capitalization.
 - A response with a 4xx or 5xx status is still a response: the body is printed and zz exits with
-  status 0, unless you pass `-f`, which exits with 22. A request that fails (connection refused,
-  unknown host, bad TLS certificate, a timeout, a malformed argument) exits with status 1, so a
-  script can tell the two apart:
+  status 0, unless you pass `-f`, which exits with 22.
+- A request that fails always prints why, and exits with a code that says which failure it was
+  (see below), so a script can tell them apart:
 
   ```sh
   until zz -f /health >/dev/null; do sleep 1; done     # wait for the server to come up
   ```
 - A request times out after 30 seconds, counting the time spent reading the body.
+
+### Exit codes
+
+Where curl has a code for the same situation, zz uses the same number.
+
+| Code | Meaning | curl |
+|------|---------|------|
+| 0 | A response arrived (any status, unless `-f`) | 0 |
+| 1 | Any other failure | |
+| 2 | Bad arguments: missing URL, bad `-H`, bad body, unknown method or flag, malformed URL | |
+| 6 | No such host | 6 |
+| 7 | Connection refused | 7 |
+| 22 | `-f` and the status was 4xx or 5xx | 22 |
+| 23 | A binary body was not written to a terminal | 23 |
+| 28 | The request timed out | 28 |
+| 35 | `https://` to a server that speaks plain HTTP | 35 |
+| 60 | The server's TLS certificate was not accepted | 60 |
 
 ## Not yet
 

@@ -74,6 +74,14 @@ var helpSections = []helpSection{
 		},
 	},
 	{
+		title: "EXIT",
+		hint:  "full list in the README",
+		rows: []helpRow{
+			{"0 ok, 1 other failure, 2 bad arguments, 22 -f on 4xx/5xx, 23 binary not shown", ""},
+			{"6 no such host, 7 refused, 28 timeout, 35 https to plain http, 60 bad cert", ""},
+		},
+	},
+	{
 		title: "CONFIG",
 		rows: []helpRow{
 			{`~/.config/zz/setting.json  {"host": "127.0.0.1", "port": 8000}`, ""},

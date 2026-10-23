@@ -1,6 +1,7 @@
 package network
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -151,11 +152,18 @@ func TestCURLConnectionRefusedIsFriendly(t *testing.T) {
 	if !strings.HasPrefix(err.Error(), "could not connect to ") {
 		t.Errorf("error = %q; want the friendly message", err)
 	}
+	if !errors.Is(err, ErrRefused) {
+		t.Errorf("errors.Is(err, ErrRefused) = false for %v", err)
+	}
 }
 
 func TestCURLBadURL(t *testing.T) {
-	if _, err := CURL("GET", "http://[::1", nil, ""); err == nil {
-		t.Error("want an error for a malformed URL")
+	_, err := CURL("GET", "http://[::1", nil, "")
+	if err == nil {
+		t.Fatal("want an error for a malformed URL")
+	}
+	if !errors.Is(err, ErrInvalidRequest) {
+		t.Errorf("errors.Is(err, ErrInvalidRequest) = false for %v", err)
 	}
 }
 
@@ -189,6 +197,9 @@ func TestCURLTimesOutWaitingForHeaders(t *testing.T) {
 	if !strings.Contains(err.Error(), "timed out after 50ms") {
 		t.Errorf("error = %q; want the friendly timeout message", err)
 	}
+	if !errors.Is(err, ErrTimeout) {
+		t.Errorf("errors.Is(err, ErrTimeout) = false for %v", err)
+	}
 }
 
 func TestCURLTimesOutReadingTheBody(t *testing.T) {
@@ -208,6 +219,9 @@ func TestCURLTimesOutReadingTheBody(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "timed out after 50ms") {
 		t.Errorf("error = %q; want the friendly timeout message", err)
+	}
+	if !errors.Is(err, ErrTimeout) {
+		t.Errorf("errors.Is(err, ErrTimeout) = false for %v", err)
 	}
 }
 

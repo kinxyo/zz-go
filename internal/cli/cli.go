@@ -27,7 +27,7 @@ func Run(args []string, flags *terminal.Flags, env Env) {
 
 	r, err := extract(args, flags, env.Settings)
 	if err != nil {
-		terminal.Fatal("%s\n", err)
+		terminal.FatalWith(exitUsage, "%s\n", err)
 	}
 
 	if r.hasBody && r.bodyArg == "-" && terminal.StdinIsTerminal() {
@@ -35,12 +35,12 @@ func Run(args []string, flags *terminal.Flags, env Env) {
 	}
 
 	if err := r.resolve(flags, env.UserAgent, os.Stdin); err != nil {
-		terminal.Fatal("%s\n", err)
+		terminal.FatalWith(exitUsage, "%s\n", err)
 	}
 
 	res, err := network.CURL(r.method, r.url, r.headers, r.payload)
 	if err != nil {
-		terminal.Fatal("%s\n", err)
+		terminal.FatalWith(exitCode(err), "%s\n", err)
 	}
 
 	shown := res.Print(printOpts(flags, r.method))
@@ -53,14 +53,6 @@ func Run(args []string, flags *terminal.Flags, env Env) {
 		terminal.ExitWith(exitOutputRefused)
 	}
 }
-
-// exitOutputRefused is what zz exits with when it would not print a binary body to a terminal,
-// the same as curl's "failed writing the output".
-const exitOutputRefused = 23
-
-// exitHTTPError is what -f exits with for a 4xx or 5xx response, the same as curl.
-// A request that could not be made at all exits with 1.
-const exitHTTPError = 22
 
 // failed reports whether -f should turn this response into a failure.
 func failed(status int, fail bool) bool {
