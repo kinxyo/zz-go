@@ -83,6 +83,7 @@ type request struct {
 func extract(args []string, flags *terminal.Flags, settings config.Settings) (request, error) {
 
 	r := request{method: http.MethodGet}
+	methodGiven := false
 
 	// TODO: query := parseHeaders(args)
 	// TODO: params := parseHeaders(args)
@@ -90,6 +91,7 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings) (re
 	if m, ok := network.MatchMethod(args[0]); ok {
 		// zz get <url>
 		r.method, args = m, args[1:]
+		methodGiven = true
 	}
 
 	if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
@@ -117,6 +119,11 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings) (re
 				return r, fmt.Errorf("%q looks like a flag; flags go before the arguments", arg)
 			}
 		}
+	}
+
+	// a body means there is something to send: POST, unless the user chose a method
+	if r.hasBody && !methodGiven {
+		r.method = http.MethodPost
 	}
 
 	return r, nil

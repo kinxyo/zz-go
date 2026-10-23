@@ -78,7 +78,9 @@ A query string is part of the URL: `zz '/search?q=go&page=2'`. Quote it, or the 
 ### Methods
 
 `get`, `post`, `put`, `patch`, `delete`, `head` and `options`, in any case, with short forms: `g`,
-`p` (or `po`), `pu`, `pa`, `d`, `he`, `opt` (or `o`). With no method, the request is a GET.
+`p` (or `po`), `pu`, `pa`, `d`, `he`, `opt` (or `o`). With no method, the request is a GET, or a
+POST if you give a body (`zz /users @body.json` posts it). A method you type always wins, so
+`zz get /x @body.json` stays a GET.
 
 `head` and `options` replies have no body worth reading, so zz always shows their status and
 headers (as if you had passed `-s -i`).

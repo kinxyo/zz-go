@@ -35,7 +35,7 @@ var helpSections = []helpSection{
 		title: "METHODS",
 		width: 30,
 		rows: []helpRow{
-			{"get post put patch delete", "no method means get"},
+			{"get post put patch delete", "no method: get, or post with a body"},
 			{"head options", "show the status and headers only"},
 			{"g p po pu pa d he opt o", "short forms"},
 		},
