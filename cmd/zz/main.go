@@ -59,5 +59,5 @@ func main() {
 		terminal.Err("config: %s (using defaults)\n", err)
 	}
 
-	cli.Run(t.Args, &t.Flags, settings, "zz/"+version)
+	cli.Run(t.Args, &t.Flags, cli.Env{Settings: settings, UserAgent: "zz/" + version})
 }

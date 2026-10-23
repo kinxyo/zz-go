@@ -1,6 +1,9 @@
 package network
 
-import "strings"
+import (
+	"net/http"
+	"strings"
+)
 
 // MatchMethod returns the HTTP method for m (or an alias of it), and false if m isn't one.
 func MatchMethod(m string) (string, bool) {
@@ -9,19 +12,19 @@ func MatchMethod(m string) (string, bool) {
 
 	switch m {
 	case "get", "g":
-		return "GET", true
+		return http.MethodGet, true
 	case "post", "p", "po":
-		return "POST", true
+		return http.MethodPost, true
 	case "put", "pu":
-		return "PUT", true
+		return http.MethodPut, true
 	case "patch", "pa":
-		return "PATCH", true
+		return http.MethodPatch, true
 	case "delete", "d":
-		return "DELETE", true
+		return http.MethodDelete, true
 	case "head", "he":
-		return "HEAD", true
+		return http.MethodHead, true
 	case "options", "opt", "o":
-		return "OPTIONS", true
+		return http.MethodOptions, true
 	default:
 		return "", false
 	}

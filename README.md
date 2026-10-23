@@ -127,10 +127,11 @@ An empty body (an empty file, empty stdin, or `""`) is an error.
 | `-s` | Show the status, colored by class (2xx green, 3xx cyan, 4xx yellow, 5xx red). |
 | `-i` | Show the response headers. |
 | `-p` | Pretty-print a JSON body. Without it the body is printed exactly as received. |
-| `-f` | Exit with status 22 if the response is a 4xx or 5xx, like `curl --fail`. The body is still printed. |
+| `-f` | Exit with status 22 if the response is a 4xx or 5xx. Unlike `curl --fail`, the body is still printed, so you can read the error. |
 | `-d` | Use `http://` for a URL typed without a scheme. |
 
-Requests send `User-Agent: zz/<version>` unless you set your own with `-H`.
+Requests send `User-Agent: zz/<version>` unless you set your own with `-H`. An empty value
+(`-H "User-Agent:"`) sends no User-Agent at all.
 
 Colors appear only when the output is a terminal; they are off when piped or redirected, or when
 `NO_COLOR` is set.
@@ -209,7 +210,7 @@ read, zz prints a warning and uses the defaults.
   script can tell the two apart:
 
   ```sh
-  until zz -f /health; do sleep 1; done     # wait for the server to come up
+  until zz -f /health >/dev/null; do sleep 1; done     # wait for the server to come up
   ```
 - A request times out after 30 seconds, counting the time spent reading the body.
 

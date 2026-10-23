@@ -14,14 +14,20 @@ import (
 	"github.com/kinxyo/zz-go/internal/terminal"
 )
 
-func Run(args []string, flags *terminal.Flags, settings config.Settings, userAgent string) {
+// Env is what Run needs besides the arguments and the flags.
+type Env struct {
+	Settings  config.Settings
+	UserAgent string // sent unless the user sets their own with -H
+}
 
-	r, err := extract(args, flags, settings)
+func Run(args []string, flags *terminal.Flags, env Env) {
+
+	r, err := extract(args, flags, env.Settings)
 	if err != nil {
 		terminal.Fatal("%s\n", err)
 	}
 
-	if err := r.resolve(flags, userAgent, os.Stdin); err != nil {
+	if err := r.resolve(flags, env.UserAgent, os.Stdin); err != nil {
 		terminal.Fatal("%s\n", err)
 	}
 
@@ -50,7 +56,7 @@ func failed(status int, fail bool) bool {
 // replies have nothing but a status and headers, so those are always shown.
 func printOpts(flags *terminal.Flags, method string) network.PrintOpts {
 	v := *flags.Verbose
-	bodyless := method == "HEAD" || method == "OPTIONS"
+	bodyless := method == http.MethodHead || method == http.MethodOptions
 
 	return network.PrintOpts{
 		URL:     v || *flags.PrintURL,
@@ -76,7 +82,7 @@ type request struct {
 // resolve reads a body from a file or stdin and builds the headers.
 func extract(args []string, flags *terminal.Flags, settings config.Settings) (request, error) {
 
-	r := request{method: "GET"}
+	r := request{method: http.MethodGet}
 
 	// TODO: query := parseHeaders(args)
 	// TODO: params := parseHeaders(args)

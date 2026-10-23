@@ -101,6 +101,19 @@ func TestCURLWithoutHeadersOrBody(t *testing.T) {
 	}
 }
 
+func TestCURLEmptyUserAgentSendsNone(t *testing.T) {
+	srv, got := newServer(t, http.StatusOK, "")
+
+	headers := http.Header{"User-Agent": {""}}
+	if _, err := CURL("GET", srv.URL, headers, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, present := (<-got).header["User-Agent"]; present {
+		t.Error("the server saw a User-Agent; an empty value should send none")
+	}
+}
+
 func TestCURLErrorStatusIsNotAnError(t *testing.T) {
 	srv, _ := newServer(t, http.StatusNotFound, "nope")
 

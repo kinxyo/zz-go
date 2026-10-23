@@ -37,7 +37,7 @@ var helpSections = []helpSection{
 		rows: []helpRow{
 			{"get post put patch delete", "no method means get"},
 			{"head options", "show the status and headers only"},
-			{"g p pu pa d he opt o", "short forms"},
+			{"g p po pu pa d he opt o", "short forms"},
 		},
 	},
 	{
@@ -60,7 +60,7 @@ var helpSections = []helpSection{
 			{"-v", "show url, time, status and response headers"},
 			{"-u  -t  -s  -i", "pick what to show: url, time, status, headers"},
 			{"-p", "pretty-print a JSON body"},
-			{"-f", "exit 22 if the response is 4xx or 5xx"},
+			{"-f", "exit 22 on a 4xx or 5xx (the body is still printed)"},
 			{"-d", "use http:// for urls typed without a scheme"},
 		},
 	},

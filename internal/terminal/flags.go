@@ -40,7 +40,7 @@ func newFlag() Flags {
 		PrintStatus:    flag.Bool("s", false, "show the status"),
 		PrintHeaders:   flag.Bool("i", false, "show the response headers"),
 		Pretty:         flag.Bool("p", false, "pretty-print a JSON body"),
-		Fail:           flag.Bool("f", false, "exit with status 22 if the response is 4xx or 5xx"),
+		Fail:           flag.Bool("f", false, "exit with status 22 on a 4xx or 5xx response (the body is still printed)"),
 		ForceHttp:      flag.Bool("d", false, "use http:// for urls typed without a scheme"),
 		Help:           &help,
 		RequestHeaders: &headers,

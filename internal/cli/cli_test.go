@@ -331,6 +331,16 @@ func TestUserAgent(t *testing.T) {
 		}
 	})
 
+	t.Run("an empty -H value clears it", func(t *testing.T) {
+		h, err := buildHeaders("", []string{"User-Agent:"}, "zz/1.2")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, ok := h["User-Agent"]; !ok || len(got) != 1 || got[0] != "" {
+			t.Errorf("User-Agent = %q, present=%v; want one empty value", got, ok)
+		}
+	})
+
 	t.Run("empty default sets nothing", func(t *testing.T) {
 		h, _ := buildHeaders("", nil, "")
 		if _, ok := h["User-Agent"]; ok {
