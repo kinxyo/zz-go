@@ -10,7 +10,7 @@ on:
 
 env:
   GO_VERSION: '1.21'
-  APP_NAME: 'zap'
+  APP_NAME: 'zz'
 
 jobs:
   test:
@@ -163,7 +163,7 @@ jobs:
         sudo dpkg -i hyperfine_1.18.0_amd64.deb
 
     - name: Build application
-      run: go build -trimpath -ldflags="-s -w" -o zap main.go
+      run: go build -trimpath -ldflags="-s -w" -o zz main.go
 
     - name: Start test server
       run: |
@@ -179,7 +179,7 @@ jobs:
         echo "" >> benchmark_results.md
         echo "### Local Server Performance" >> benchmark_results.md
         echo "\`\`\`" >> benchmark_results.md
-        timeout 60s hyperfine -N './zap /' 'curl -s localhost:8000' --export-markdown temp_local.md || true
+        timeout 60s hyperfine -N './zz /' 'curl -s localhost:8000' --export-markdown temp_local.md || true
         if [ -f temp_local.md ]; then
           tail -n +3 temp_local.md >> benchmark_results.md
         else
@@ -190,7 +190,7 @@ jobs:
         
         echo "### Remote API Performance" >> benchmark_results.md
         echo "\`\`\`" >> benchmark_results.md
-        timeout 60s hyperfine './zap httpbin.org/json' 'curl -s https://httpbin.org/json' --export-markdown temp_remote.md || true
+        timeout 60s hyperfine './zz httpbin.org/json' 'curl -s https://httpbin.org/json' --export-markdown temp_remote.md || true
         if [ -f temp_remote.md ]; then
           tail -n +3 temp_remote.md >> benchmark_results.md
         else
@@ -254,7 +254,7 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: |
-          */zap-*
+          */zz-*
         generate_release_notes: true
         draft: false
         prerelease: ${{ contains(github.ref_name, 'rc') || contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') }}

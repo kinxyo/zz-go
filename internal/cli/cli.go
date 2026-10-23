@@ -51,7 +51,7 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings) (re
 	// TODO: params := parseHeaders(args)
 
 	if m, ok := network.MatchMethod(args[0]); ok {
-		// zap get <url>
+		// zz get <url>
 		r.method, args = m, args[1:]
 	}
 
@@ -59,11 +59,11 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings) (re
 		return r, errors.New("missing URL")
 	}
 
-	// zap <url>
+	// zz <url>
 	r.url = network.MakeURL(args[0], settings.BaseURL(), *flags.ForceHttp)
 
 	if len(args) > 1 {
-		// zap <url> '{...}'
+		// zz <url> '{...}'
 		if !json.Valid([]byte(args[1])) {
 			// two URLs in a row: the first one was meant to be a method
 			if looksLikeURL(args[1]) {

@@ -1,4 +1,4 @@
-# Zap ⚡
+# zz ⚡
 
 ## Port list: Zig `zigzag` (v0.8, Jan 2026) vs this Go version
 
@@ -10,7 +10,7 @@ Based on the Zig code (`cli.zig`, `http.zig`, `file.zig`), not its `help.zig`, w
 |---|------|---------|--------------|----------|
 | 1 | Request | Custom headers | `-h "Key: Value"` (repeatable), `-hj '{"K":"V"}'` | None (TODO in `cli/helpers.go`) |
 | 2 | Request | Default `User-Agent` | Always sends `zigzag` | Go's default `Go-http-client/1.1` |
-| 3 | Request | Flags anywhere in args | `zz /x -v` works (manual arg loop) | `flag` stops at first non-flag arg; `zap /x -v` errors |
+| 3 | Request | Flags anywhere in args | `zz /x -v` works (manual arg loop) | `flag` stops at first non-flag arg; `zz /x -v` errors |
 | 4 | Request | Free-form body | Any string is sent as-is | Must start with `{` and end with `}` |
 | 5 | Request | No-body check | POST/PUT/PATCH without body fails with `NoPayload` before connecting | Sends an empty body |
 | 6 | Request | Port flag | `-p <port>` for `/path` URLs | Hard-coded `127.0.0.1:8000` (`network/helper.go`) |
@@ -31,7 +31,7 @@ Based on the Zig code (`cli.zig`, `http.zig`, `file.zig`), not its `help.zig`, w
 | Pretty-printed JSON | `-n` disables it. Zig prints the raw body. |
 | Request timing | `-t`. Note: stops before the body is read. |
 | Status line | `-s` (and `-u` for URL). Colors by class: 2xx green, 3xx cyan, 4xx yellow, 5xx red. Zig colors only a few codes. |
-| `zap version`, CI workflow | CI pins Go 1.21 while `go.mod` says 1.25. |
+| `zz version`, CI workflow | CI pins Go 1.21 while `go.mod` says 1.25. |
 
 ### Missing in both
 
