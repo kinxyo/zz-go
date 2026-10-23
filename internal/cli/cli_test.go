@@ -511,3 +511,74 @@ func TestNoBodyMeansNoPayload(t *testing.T) {
 		t.Errorf("hasBody=%v payload=%q content-type=%q", r.hasBody, r.payload, r.headers.Get("Content-Type"))
 	}
 }
+
+func TestJSONContentTypeKeepsTheBodyCheck(t *testing.T) {
+	bad := `{"a":`
+
+	t.Run("a JSON Content-Type with a broken body is refused", func(t *testing.T) {
+		for _, ct := range []string{
+			"application/json",
+			"Application/JSON",
+			"application/json; charset=utf-8",
+			"application/vnd.api+json",
+			"application/problem+json",
+			"text/json",
+		} {
+			_, err := build([]string{"post", "/x", bad}, flagsFor(false, "Content-Type: "+ct), local, "")
+			if err == nil || !strings.Contains(err.Error(), "but the Content-Type is "+ct) {
+				t.Errorf("Content-Type %q: error = %v", ct, err)
+			}
+		}
+	})
+
+	t.Run("other Content-Types send the body as is", func(t *testing.T) {
+		for _, ct := range []string{
+			"text/plain",
+			"application/x-www-form-urlencoded",
+			"application/xml",
+			"application/x-ndjson",
+			"application/jsonl",
+		} {
+			r, err := build([]string{"post", "/x", bad}, flagsFor(false, "Content-Type: "+ct), local, "")
+			if err != nil {
+				t.Errorf("Content-Type %q: %v", ct, err)
+				continue
+			}
+			if r.payload != bad {
+				t.Errorf("Content-Type %q: payload = %q", ct, r.payload)
+			}
+		}
+	})
+
+	t.Run("a JSON Content-Type with a valid body is fine", func(t *testing.T) {
+		r, err := build([]string{"post", "/x", `{"a":1}`}, flagsFor(false, "Content-Type: application/vnd.api+json"), local, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.headers.Get("Content-Type") != "application/vnd.api+json" {
+			t.Errorf("Content-Type = %q", r.headers.Get("Content-Type"))
+		}
+	})
+}
+
+func TestIsJSONType(t *testing.T) {
+	cases := map[string]bool{
+		"application/json":               true,
+		"APPLICATION/JSON":               true,
+		"application/json;charset=utf-8": true,
+		"application/vnd.api+json":       true,
+		"text/json":                      true,
+		"application/x-ndjson":           false,
+		"application/json-seq":           false,
+		"text/plain":                     false,
+		"application/xml":                false,
+		"":                               false,
+		"json":                           false,
+	}
+
+	for in, want := range cases {
+		if got := isJSONType(in); got != want {
+			t.Errorf("isJSONType(%q) = %v; want %v", in, got, want)
+		}
+	}
+}

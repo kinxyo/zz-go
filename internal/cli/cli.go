@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"strings"
@@ -130,7 +131,7 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings) (re
 }
 
 // resolve reads the body (stdin is used for "-") and builds the headers. A body that isn't JSON
-// is only accepted when the user set their own Content-Type.
+// is only accepted when the user set their own Content-Type, and not a JSON one.
 func (r *request) resolve(flags *terminal.Flags, userAgent string, stdin io.Reader) error {
 	if r.hasBody {
 		body, err := resolveBody(r.bodyArg, stdin)
@@ -146,11 +147,27 @@ func (r *request) resolve(flags *terminal.Flags, userAgent string, stdin io.Read
 	}
 	r.headers = h
 
-	if r.payload != "" && !json.Valid([]byte(r.payload)) && h.Get("Content-Type") == "" {
-		return fmt.Errorf("%s is not valid JSON; to send it as is, set a Content-Type with -H", describeBody(r.bodyArg))
+	if r.payload != "" && !json.Valid([]byte(r.payload)) {
+		switch contentType := h.Get("Content-Type"); {
+		case contentType == "":
+			return fmt.Errorf("%s is not valid JSON; to send it as is, set a Content-Type with -H", describeBody(r.bodyArg))
+		case isJSONType(contentType):
+			return fmt.Errorf("%s is not valid JSON, but the Content-Type is %s", describeBody(r.bodyArg), contentType)
+		}
 	}
 
 	return nil
+}
+
+// isJSONType reports whether a Content-Type names JSON: application/json, text/json or anything
+// ending in +json. Types like application/x-ndjson are not JSON documents, so they don't count.
+func isJSONType(contentType string) bool {
+	media, _, err := mime.ParseMediaType(contentType)
+	if err != nil {
+		media = strings.ToLower(strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0]))
+	}
+
+	return media == "application/json" || media == "text/json" || strings.HasSuffix(media, "+json")
 }
 
 // resolveBody returns the body for an argument that is inline, "@path" (a file) or "-" (stdin).

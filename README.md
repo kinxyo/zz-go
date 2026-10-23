@@ -108,8 +108,9 @@ EOF
 ```
 
 A body that isn't valid JSON is only sent if you set your own `Content-Type`; without one, zz
-stops with an error, which catches typos like `zz post /users hello`. Your header also replaces the
-default for JSON bodies:
+stops with an error, which catches typos like `zz post /users hello`. If the `Content-Type` you set
+is a JSON one (`application/json`, or anything ending in `+json`), the body must still be valid
+JSON, so a typo is caught there too. Your header also replaces the default for JSON bodies:
 
 ```sh
 zz -H "Content-Type: application/x-www-form-urlencoded" post /login 'user=alice&pass=secret'
