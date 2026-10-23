@@ -1,9 +1,6 @@
 package network
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 // MatchMethod returns the HTTP method for m (or an alias of it), and false if m isn't one.
 func MatchMethod(m string) (string, bool) {
@@ -29,21 +26,22 @@ func MatchMethod(m string) (string, bool) {
 // MakeURL turns what the user typed into a URL. base is where paths like "/users" go.
 func MakeURL(path string, base string, forceHTTP bool) string {
 	// Example:
-	// 1. zap /api/users (local)
-	// 2. zap httpbin.org/json (global)
-	// 3. zap -d httpbin.org/json (global without https)
+	// 1. zz /api/users (local, from the config)
+	// 2. zz httpbin.org/json (https)
+	// 3. zz -h httpbin.org/json (http)
+	// A URL that already has a scheme is left alone, even with -h.
 
 	if strings.HasPrefix(path, "/") {
 		return base + path
 	}
 
-	if forceHTTP {
-		return fmt.Sprintf("http://%s", path)
-	}
-
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
-		return fmt.Sprintf("%s", path)
+		return path
 	}
 
-	return fmt.Sprintf("https://%s", path)
+	if forceHTTP {
+		return "http://" + path
+	}
+
+	return "https://" + path
 }
