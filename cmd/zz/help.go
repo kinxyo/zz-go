@@ -32,7 +32,7 @@ const body = `  DESCRIPTION
   COMMANDS
     ⚉ help               Show this help message
     ⚉ version, v         Show the version
-    ⚉ run [file]         Read a .zap collection file (prints its tokens; requests are not sent yet)
+    ⚉ run [file]         Read a .zz collection file (prints its tokens; requests are not sent yet)
     ⚉ (no args)          Interactive TUI (not built yet)
 
   METHODS

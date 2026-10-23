@@ -2,7 +2,7 @@ package collection
 
 func GetTestFileName() string {
 	// TODO: return config name
-	return "example/test.zap"
+	return "example/test.zz"
 }
 
 func getWord(l *Lexer, content []byte) string {
