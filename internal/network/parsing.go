@@ -3,69 +3,41 @@ package network
 import (
 	"fmt"
 	"strings"
-
-	"github.com/kinxyo/zz-go/internal/terminal"
 )
 
-func ParsePayload(m *Method, args []string) Payload {
-	if len(args) < 3 {
-		return ""
-	}
-
-	if *m == "GET" {
-		return ""
-	}
-
-	var p []byte = []byte(args[2])
-
-	if p[0] != '{' || p[len(p)-1] != '}' {
-		terminal.Fatal("Invalid Payload")
-	}
-
-	return Payload(args[2])
-}
-
-func ParseMethod(m string) Method {
+// MatchMethod returns the HTTP method for m (or an alias of it), and false if m isn't one.
+func MatchMethod(m string) (string, bool) {
 	m = strings.ToLower(m)
 	m = strings.TrimSpace(m)
 
 	switch m {
 	case "get", "g":
-		return "GET"
+		return "GET", true
 	case "post", "p", "po":
-		return "POST"
+		return "POST", true
 	case "put", "pu":
-		return "PUT"
+		return "PUT", true
 	case "patch", "pa":
-		return "PATCH"
+		return "PATCH", true
 	case "delete", "d":
-		return "DELETE"
+		return "DELETE", true
 	default:
-		terminal.Err("%v: `%s`\n", ERR_INVALID_METHOD, m)
-		if len(m) >= 1 && m[0] == '/' {
-			terminal.PrintFC(terminal.TextYellow, "Hint: If using flags, add them before the arg(s).\n")
-		}
-		terminal.Exit()
-		return ""
+		return "", false
 	}
 }
 
-func ParseURL(path string, force_http bool) URL {
-	str := makeurl(path, force_http)
-	return fromStrToUrl(str)
-}
-
-func makeurl(path string, force_http bool) string {
+// MakeURL turns what the user typed into a URL. base is where paths like "/users" go.
+func MakeURL(path string, base string, forceHTTP bool) string {
 	// Example:
 	// 1. zap /api/users (local)
 	// 2. zap httpbin.org/json (global)
 	// 3. zap -d httpbin.org/json (global without https)
 
 	if strings.HasPrefix(path, "/") {
-		return fmt.Sprintf("http://%s%s%s", getHost(), getAddr(), path)
+		return base + path
 	}
 
-	if force_http {
+	if forceHTTP {
 		return fmt.Sprintf("http://%s", path)
 	}
 
@@ -74,8 +46,4 @@ func makeurl(path string, force_http bool) string {
 	}
 
 	return fmt.Sprintf("https://%s", path)
-}
-
-func fromStrToUrl(url string) URL {
-	return URL(url)
 }

@@ -3,47 +3,56 @@ package main
 import (
 	"github.com/kinxyo/zz-go/internal/cli"
 	"github.com/kinxyo/zz-go/internal/collection"
+	"github.com/kinxyo/zz-go/internal/config"
 	"github.com/kinxyo/zz-go/internal/terminal"
 	"github.com/kinxyo/zz-go/internal/tui"
 )
 
 //  ========================================================================================
 //
-//      $$$$$$$$\ $$$$$$\   $$$$$$\
-//      \____$$  |\____$$\ $$  __$$\
-//        $$$$ _/ $$$$$$$ |$$ /  $$ |
-//       $$  _/  $$  __$$ |$$ |  $$ |
-//      $$$$$$$$\\$$$$$$$ |$$$$$$$  |
-//      \________|\_______|$$  ____/
-//                         $$ |
-//                         $$ |
-//                         \__|
+//                 /$$
+//                |__/
+//       /$$$$$$$$ /$$  /$$$$$$  /$$$$$$$$  /$$$$$$   /$$$$$$
+//      |____ /$$/| $$ /$$__  $$|____ /$$/ |____  $$ /$$__  $$
+//         /$$$$/ | $$| $$  \ $$   /$$$$/   /$$$$$$$| $$  \ $$
+//        /$$__/  | $$| $$  | $$  /$$__/   /$$__  $$| $$  | $$
+//       /$$$$$$$$| $$|  $$$$$$$ /$$$$$$$$|  $$$$$$$|  $$$$$$$
+//      |________/|__/ \____  $$|________/ \_______/ \____  $$
+//                     /$$  \ $$                     /$$  \ $$
+//                    |  $$$$$$/                    |  $$$$$$/
+//                     \______/                      \______/
 //
-//        ⚡Version 0.6 ⚡
+//        ⚡Version 1.0 ⚡
 //
 //  ========================================================================================
 
 func main() {
-	flags := terminal.LoadFlags()
-	args := terminal.LoadArgs()
+	t := terminal.GetArgs()
 
-	// No args
-	if len(args) == 0 {
+	if len(t.Args) == 0 {
 		tui.Run()
 		return
 	}
 
-	// 1st arg "run"
-	if args[0] == "run" {
-		collection.Run(args, flags)
+	if t.Args[0] == "run" {
+		collection.Run(t.Args, &t.Flags)
 		return
 	}
 
-	if args[0] == "version" || args[0] == "v" {
-		terminal.Print("zap -- v0.5")
+	if t.Args[0] == "version" || t.Args[0] == "v" {
+		printVersion()
 		return
 	}
 
-	// Anything else (No arg case already handled!)
-	cli.Run(args, flags)
+	if t.Args[0] == "help" || t.Args[0] == "-h" {
+		printHelp()
+		return
+	}
+
+	settings, err := config.Load()
+	if err != nil {
+		terminal.Err("config: %s (using defaults)\n", err)
+	}
+
+	cli.Run(t.Args, &t.Flags, settings)
 }

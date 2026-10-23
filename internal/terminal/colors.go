@@ -3,6 +3,7 @@ package terminal
 import (
 	"fmt"
 	"io"
+	"os"
 )
 
 type TextFmt string
@@ -19,6 +20,27 @@ const (
 	TextDim     TextFmt = "\x1b[2m"
 )
 
+// useColor is true only when w is a terminal and NO_COLOR isn't set, so piped
+// or redirected output stays free of escape codes.
+func useColor(w io.Writer) bool {
+	if os.Getenv("NO_COLOR") != "" {
+		return false
+	}
+
+	f, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+
+	info, err := f.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
 func colorFmt(std io.Writer, color TextFmt, format string, a ...any) {
+	if !useColor(std) {
+		fmt.Fprintf(std, format, a...)
+		return
+	}
+
 	fmt.Fprintf(std, string(color)+format+string(Reset), a...)
 }
