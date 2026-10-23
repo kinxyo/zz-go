@@ -117,6 +117,9 @@ zz -H "Content-Type: application/x-www-form-urlencoded" post /login 'user=alice&
 zz -H "Content-Type: application/vnd.api+json" post /things '{"data":{}}'
 ```
 
+A body from a file or stdin is sent exactly as it is, including its final newline (a heredoc always
+ends with one). That matches `curl --data-binary`; `curl -d @file` strips newlines instead.
+
 An empty body (an empty file, empty stdin, or `""`) is an error. A body that is text starting with
 `@` would be read as a file name, so send it through stdin instead:
 `printf '@alice hello' | zz -H "Content-Type: text/plain" post /x -`.
