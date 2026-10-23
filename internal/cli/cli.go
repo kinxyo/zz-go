@@ -65,6 +65,10 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings) (re
 	if len(args) > 1 {
 		// zap <url> '{...}'
 		if !json.Valid([]byte(args[1])) {
+			// two URLs in a row: the first one was meant to be a method
+			if looksLikeURL(args[1]) {
+				return r, fmt.Errorf("unknown method %q (use get, post, put, patch or delete)", args[0])
+			}
 			if strings.HasPrefix(args[1], "-") {
 				return r, fmt.Errorf("%q looks like a flag; flags go before the arguments", args[1])
 			}
@@ -102,4 +106,8 @@ func buildHeaders(payload string, raw []string) (http.Header, error) {
 	}
 
 	return h, nil
+}
+
+func looksLikeURL(s string) bool {
+	return strings.HasPrefix(s, "/") || strings.Contains(s, "://")
 }

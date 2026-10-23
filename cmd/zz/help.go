@@ -26,51 +26,56 @@ const body = `  DESCRIPTION
     A fast and elegant HTTP client for API testing and development.
 
   USAGE
-    zz [METHOD] [URL] [OPTIONS]
-    zz [COMMAND]
+    zz [FLAGS] [METHOD] <URL> ['<json body>']
+    zz <COMMAND>
 
   COMMANDS
-    ⚉ (no args)          Launch interactive TUI mode
-    ⚉ run <file.json>    Execute API collection from file
-    ⚉ help, -h, --help   Show this help message
+    ⚉ help               Show this help message
+    ⚉ version, v         Show the version
+    ⚉ run [file]         Read a .zap collection file (prints its tokens; requests are not sent yet)
+    ⚉ (no args)          Interactive TUI (not built yet)
 
   METHODS
-    get, post, put, patch, delete, head, options
-    (Case insensitive. Defaults to GET if omitted)
+    get, post, put, patch, delete
+    Short forms: g, p (or po), pu, pa, d. Case insensitive. Defaults to GET if omitted.
 
-  OPTIONS
-    ⚉ -v, --verbose      Show request/response details
-    ⚉ -d, --dev          Development mode (use localhost)
-    ⚉ -h <json>          Set request headers as JSON object
-    ⚉ -b <json>          Set request body as JSON object
-    ⚉ -p <port>          Specify port (default: 8000)
+  FLAGS (go before the URL)
+    ⚉ -H "Key: Value"    Add a request header (repeatable)
+    ⚉ -v                 Show the URL, time and status (same as -u -t -s)
+    ⚉ -u                 Show the URL
+    ⚉ -t                 Show the time taken
+    ⚉ -s                 Show the status
+    ⚉ -n                 Print the body as received (no JSON pretty-printing)
+    ⚉ -h                 Use http:// for URLs typed without a scheme
 
   EXAMPLES
     Basic requests:
       zz httpbin.org/get
-      zz get https://api.github.com/users/octocat -v
+      zz -v get https://api.github.com/users/octocat
 
-    With headers:
-      zz get /api -h '{"Authorization":"Bearer token"}' -v
+    With headers (flags go first):
+      zz -H "Authorization: Bearer token" /api
 
-    POST with body:
-      zz post /msg '{"message":"Hello!"}' -v
-      zz post /users -b '{"name":"Alice"}' -h '{"Content-Type":"application/json"}'
+    POST with a JSON body:
+      zz post /msg '{"message":"Hello!"}'
+      zz -H "X-Api-Key: abc" post /users '{"name":"Alice"}'
 
-    Development mode:
-      zz /api -d -v              # Hits http://localhost:8000/api
-      zz post /data '{}' -d -p 3000
+    Local server over plain http:
+      zz /api                        # http://127.0.0.1:8000/api
+      zz -h localhost:3000/health    # http://localhost:3000/health
 
-    Run collection:
-      zz run tests.json
+    Save the raw body:
+      zz -n /file > out.json
 
   NOTES
-    ⚉ URLs without scheme default to http://
-    ⚉ Relative paths in -d mode use http://localhost:<port>
-    ⚉ JSON strings must be properly quoted in shell
+    ⚉ /path goes to the host and port in ~/.config/zz/setting.json (default 127.0.0.1:8000)
+    ⚉ URLs typed without a scheme use https://
+    ⚉ A body must be valid JSON; Content-Type: application/json is added unless you pass your own -H
+    ⚉ Flags go before the URL: zz -v /users, not zz /users -v
+    ⚉ The URL, time and status go to stderr and the body to stdout, so output can be piped
 
   MORE INFO
-    Repository: https://github.com/kinxyo/zigzap
-    Issues:     https://github.com/kinxyo/zigzap/issues
+    Repository: https://github.com/kinxyo/zz-go
+    Issues:     https://github.com/kinxyo/zz-go/issues
 
 `
