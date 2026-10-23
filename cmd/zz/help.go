@@ -62,6 +62,7 @@ var helpSections = []helpSection{
 			{"-p", "pretty-print a JSON body"},
 			{"-f", "exit 22 on a 4xx or 5xx (the body is still printed)"},
 			{"-d", "use http:// for urls typed without a scheme"},
+			{"-m <seconds>", "time limit, 0 for none (default: the config's, 30)"},
 		},
 	},
 	{
@@ -84,7 +85,7 @@ var helpSections = []helpSection{
 	{
 		title: "CONFIG",
 		rows: []helpRow{
-			{`~/.config/zz/setting.json  {"host": "127.0.0.1", "port": 8000}`, ""},
+			{`~/.config/zz/setting.json  {"host": "127.0.0.1", "port": 8000, "timeout": 30}`, ""},
 		},
 	},
 }

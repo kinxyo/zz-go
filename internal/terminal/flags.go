@@ -3,6 +3,7 @@ package terminal
 import (
 	"flag"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -16,6 +17,7 @@ type Flags struct {
 	Fail           *bool
 	ForceHttp      *bool
 	Help           *bool
+	Timeout        *int // -m, in seconds; -1 when it wasn't given
 	RequestHeaders *[]string
 }
 
@@ -26,6 +28,16 @@ func newFlag() Flags {
 			return fmt.Errorf("want \"Key: Value\", got %q", s)
 		}
 		headers = append(headers, s)
+		return nil
+	})
+
+	timeout := -1
+	flag.Func("m", "time limit in seconds, 0 for none (default: the config's timeout, 30)", func(s string) error {
+		n, err := parseSeconds(s)
+		if err != nil {
+			return err
+		}
+		timeout = n
 		return nil
 	})
 
@@ -43,10 +55,20 @@ func newFlag() Flags {
 		Fail:           flag.Bool("f", false, "exit with status 22 on a 4xx or 5xx response (the body is still printed)"),
 		ForceHttp:      flag.Bool("d", false, "use http:// for urls typed without a scheme"),
 		Help:           &help,
+		Timeout:        &timeout,
 		RequestHeaders: &headers,
 	}
 
 	return f
+}
+
+// parseSeconds reads a whole number of seconds, 0 or more.
+func parseSeconds(s string) (int, error) {
+	n, err := strconv.Atoi(strings.TrimSpace(s))
+	if err != nil || n < 0 {
+		return 0, fmt.Errorf("want a whole number of seconds, 0 or more; got %q", s)
+	}
+	return n, nil
 }
 
 type Args struct {

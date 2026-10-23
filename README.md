@@ -137,6 +137,7 @@ An empty body (an empty file, empty stdin, or `""`) is an error. A body that is 
 | `-p` | Pretty-print a JSON body. Without it the body is printed exactly as received. |
 | `-f` | Exit with status 22 if the response is a 4xx or 5xx. Unlike `curl --fail`, the body is still printed, so you can read the error. |
 | `-d` | Use `http://` for a URL typed without a scheme. |
+| `-m <seconds>` | Time limit for the whole request, in whole seconds; `0` means no limit. Overrides `timeout` in the [config](#config). |
 
 Requests send `User-Agent: zz/<version>` unless you set your own with `-H`. An empty value
 (`-H "User-Agent:"`) sends no User-Agent at all.
@@ -197,12 +198,15 @@ The first request creates `~/.config/zz/setting.json` (on macOS
 ```json
 {
   "host": "127.0.0.1",
-  "port": 8000
+  "port": 8000,
+  "timeout": 30
 }
 ```
 
-This decides where `/path` URLs go. A key you leave out keeps its default. If the file can't be
-read, zz prints a warning and uses the defaults.
+`host` and `port` decide where `/path` URLs go. `timeout` is the time limit for a whole request
+in whole seconds, including reading the body; `0` means no limit, and `-m` overrides it for one
+request. A key you leave out keeps its default. If the file can't be read, or a value is wrong (a
+port out of range, a negative or non-whole timeout), zz prints a warning and uses the defaults.
 
 ## Output and errors
 
@@ -223,7 +227,8 @@ read, zz prints a warning and uses the defaults.
   ```sh
   until zz -f /health >/dev/null; do sleep 1; done     # wait for the server to come up
   ```
-- A request times out after 30 seconds, counting the time spent reading the body.
+- A request times out after 30 seconds by default, counting the time spent reading the body. Set
+  `timeout` in the config, or `-m <seconds>` for one request; `0` means no limit.
 
 ### Exit codes
 

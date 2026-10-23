@@ -60,13 +60,13 @@ func TestLoadFirstRunCreatesTheFile(t *testing.T) {
 
 func TestLoadReadsTheFile(t *testing.T) {
 	path := isolate(t)
-	writeConfig(t, path, `{"host": "example.test", "port": 3000}`)
+	writeConfig(t, path, `{"host": "example.test", "port": 3000, "timeout": 5}`)
 
 	got, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (Settings{Host: "example.test", Port: 3000}); got != want {
+	if want := (Settings{Host: "example.test", Port: 3000, Timeout: 5}); got != want {
 		t.Errorf("got %+v; want %+v", got, want)
 	}
 }
@@ -79,7 +79,7 @@ func TestLoadMissingKeysKeepTheirDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (Settings{Host: defaults().Host, Port: 3000}); got != want {
+	if want := (Settings{Host: defaults().Host, Port: 3000, Timeout: defaults().Timeout}); got != want {
 		t.Errorf("only port set: got %+v; want %+v", got, want)
 	}
 
@@ -88,7 +88,7 @@ func TestLoadMissingKeysKeepTheirDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (Settings{Host: "example.test", Port: defaults().Port}); got != want {
+	if want := (Settings{Host: "example.test", Port: defaults().Port, Timeout: defaults().Timeout}); got != want {
 		t.Errorf("only host set: got %+v; want %+v", got, want)
 	}
 }
@@ -120,6 +120,9 @@ func TestLoadRejectsBadFiles(t *testing.T) {
 		{"port too big", `{"port": 99999}`},
 		{"empty host", `{"host": ""}`},
 		{"empty file", ``},
+		{"negative timeout", `{"timeout": -1}`},
+		{"timeout as a duration string", `{"timeout": "30s"}`},
+		{"fractional timeout", `{"timeout": 1.5}`},
 	}
 
 	for _, c := range cases {
@@ -156,5 +159,34 @@ func TestBaseURL(t *testing.T) {
 		if got := c.settings.BaseURL(); got != c.want {
 			t.Errorf("%+v.BaseURL() = %q; want %q", c.settings, got, c.want)
 		}
+	}
+}
+
+func TestTimeoutDefaultAndZero(t *testing.T) {
+	if defaults().Timeout != 30 {
+		t.Errorf("default timeout = %d; want 30", defaults().Timeout)
+	}
+
+	path := isolate(t)
+	writeConfig(t, path, `{"timeout": 0}`)
+
+	got, err := Load()
+	if err != nil {
+		t.Fatalf("0 means no limit and should load: %v", err)
+	}
+	if got.Timeout != 0 {
+		t.Errorf("timeout = %d; want 0", got.Timeout)
+	}
+}
+
+func TestFirstRunFileHasTheTimeout(t *testing.T) {
+	path := isolate(t)
+
+	if _, err := Load(); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), `"timeout": 30`) {
+		t.Errorf("new file should show the timeout:\n%s", data)
 	}
 }

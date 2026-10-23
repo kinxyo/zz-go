@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kinxyo/zz-go/internal/config"
 	"github.com/kinxyo/zz-go/internal/network"
@@ -641,5 +642,25 @@ func TestMissingBodyFileSuggestsStdin(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "pipe it in") {
 		t.Errorf("error %q should not carry the hint", err)
+	}
+}
+
+func TestTimeoutFor(t *testing.T) {
+	cases := []struct {
+		name         string
+		config, flag int
+		want         time.Duration
+	}{
+		{"config when -m is not given", 30, -1, 30 * time.Second},
+		{"config of 0 means no limit", 0, -1, 0},
+		{"-m wins over the config", 30, 5, 5 * time.Second},
+		{"-m 0 turns the limit off", 30, 0, 0},
+		{"-m can raise it", 10, 120, 120 * time.Second},
+	}
+
+	for _, c := range cases {
+		if got := timeoutFor(c.config, c.flag); got != c.want {
+			t.Errorf("%s: timeoutFor(%d, %d) = %v; want %v", c.name, c.config, c.flag, got, c.want)
+		}
 	}
 }

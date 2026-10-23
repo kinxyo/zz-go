@@ -12,14 +12,16 @@ import (
 )
 
 type Settings struct {
-	Host string `json:"host"`
-	Port int    `json:"port"`
+	Host    string `json:"host"`
+	Port    int    `json:"port"`
+	Timeout int    `json:"timeout"` // seconds for a whole request; 0 means no limit
 }
 
 func defaults() Settings {
 	return Settings{
-		Host: "127.0.0.1",
-		Port: 8000,
+		Host:    "127.0.0.1",
+		Port:    8000,
+		Timeout: 30,
 	}
 }
 
@@ -47,6 +49,10 @@ func Load() (Settings, error) {
 
 	if s.Host == "" || s.Port < 1 || s.Port > 65535 {
 		return defaults(), fmt.Errorf("%s: need a host and a port between 1 and 65535", path)
+	}
+
+	if s.Timeout < 0 {
+		return defaults(), fmt.Errorf("%s: timeout is a number of seconds, 0 or more (0 means no limit)", path)
 	}
 
 	return s, nil

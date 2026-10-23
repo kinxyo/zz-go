@@ -44,7 +44,7 @@ func Run(args []string, flags *terminal.Flags, env Env) {
 		URL:     r.url,
 		Header:  r.headers,
 		Body:    r.payload,
-		Timeout: 30 * time.Second,
+		Timeout: timeoutFor(env.Settings.Timeout, *flags.Timeout),
 	})
 	if err != nil {
 		terminal.FatalWith(exitCode(err), "%s\n", err)
@@ -59,6 +59,14 @@ func Run(args []string, flags *terminal.Flags, env Env) {
 	if !shown {
 		terminal.ExitWith(exitOutputRefused)
 	}
+}
+
+// timeoutFor picks the time limit: -m when it was given (flagSeconds >= 0), otherwise the config.
+func timeoutFor(configSeconds, flagSeconds int) time.Duration {
+	if flagSeconds >= 0 {
+		return time.Duration(flagSeconds) * time.Second
+	}
+	return time.Duration(configSeconds) * time.Second
 }
 
 // failed reports whether -f should turn this response into a failure.
