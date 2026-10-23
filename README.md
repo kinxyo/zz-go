@@ -85,12 +85,36 @@ headers (as if you had passed `-s -i`).
 
 ### Body
 
-The last argument is the body and must be valid JSON. `Content-Type: application/json` is added
-whenever there is a body. To send something else, pass your own header, which takes priority:
+The last argument is the body. It can be given three ways:
+
+| You type | The body is |
+|----------|-------------|
+| `'{"a":1}'` | the text you typed |
+| `@body.json` | the contents of that file |
+| `-` | whatever is on stdin |
+
+A JSON body gets `Content-Type: application/json` automatically. To avoid quoting JSON in the
+shell at all, put it in a file, or use a heredoc (the quoted `'EOF'` means nothing inside is
+treated specially, so no escaping):
 
 ```sh
+zz post /users @body.json
+
+zz post /users - <<'EOF'
+{"name": "Alice", "tags": ["a", "b"]}
+EOF
+```
+
+A body that isn't valid JSON is only sent if you set your own `Content-Type`; without one, zz
+stops with an error, which catches typos like `zz post /users hello`. Your header also replaces the
+default for JSON bodies:
+
+```sh
+zz -H "Content-Type: application/x-www-form-urlencoded" post /login 'user=alice&pass=secret'
 zz -H "Content-Type: application/vnd.api+json" post /things '{"data":{}}'
 ```
+
+An empty body (an empty file, empty stdin, or `""`) is an error.
 
 ### Flags
 
@@ -139,6 +163,7 @@ POST with a JSON body:
 ```sh
 zz post /msg '{"message":"Hello!"}'
 zz -H "X-Api-Key: abc" post /users '{"name":"Alice"}'
+zz post /users @body.json
 ```
 
 A local server over plain http:

@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/kinxyo/zz-go/internal/config"
@@ -14,8 +16,12 @@ import (
 
 func Run(args []string, flags *terminal.Flags, settings config.Settings, userAgent string) {
 
-	r, err := extract(args, flags, settings, userAgent)
+	r, err := extract(args, flags, settings)
 	if err != nil {
+		terminal.Fatal("%s\n", err)
+	}
+
+	if err := r.resolve(flags, userAgent, os.Stdin); err != nil {
 		terminal.Fatal("%s\n", err)
 	}
 
@@ -58,14 +64,17 @@ func printOpts(flags *terminal.Flags, method string) network.PrintOpts {
 type request struct {
 	method  string
 	url     string
-	payload string
+	hasBody bool
+	bodyArg string // the body as typed: inline, @file or -
+	payload string // the body itself, once resolve has read it
 	headers http.Header
 	// query   string
 	// params  string
 }
 
-// extract builds a request from `[method] <url> ['{...}']` and the flags.
-func extract(args []string, flags *terminal.Flags, settings config.Settings, userAgent string) (request, error) {
+// extract builds a request from `[method] <url> [body]`. It only reads the arguments;
+// resolve reads a body from a file or stdin and builds the headers.
+func extract(args []string, flags *terminal.Flags, settings config.Settings) (request, error) {
 
 	r := request{method: "GET"}
 
@@ -89,27 +98,85 @@ func extract(args []string, flags *terminal.Flags, settings config.Settings, use
 	r.url = network.MakeURL(args[0], settings.BaseURL(), *flags.ForceHttp)
 
 	if len(args) > 1 {
-		// zz <url> '{...}'
-		if !json.Valid([]byte(args[1])) {
+		// zz <url> '{...}' | @file | -
+		arg := args[1]
+		r.hasBody, r.bodyArg = true, arg
+
+		if arg != "-" && !strings.HasPrefix(arg, "@") && !json.Valid([]byte(arg)) {
 			// two URLs in a row: the first one was meant to be a method
-			if looksLikeURL(args[1]) {
+			if looksLikeURL(arg) {
 				return r, fmt.Errorf("unknown method %q (use get, post, put, patch, delete, head or options)", args[0])
 			}
-			if strings.HasPrefix(args[1], "-") {
-				return r, fmt.Errorf("%q looks like a flag; flags go before the arguments", args[1])
+			if strings.HasPrefix(arg, "-") {
+				return r, fmt.Errorf("%q looks like a flag; flags go before the arguments", arg)
 			}
-			return r, fmt.Errorf("payload %q is not valid JSON", args[1])
 		}
-		r.payload = args[1]
+	}
+
+	return r, nil
+}
+
+// resolve reads the body (stdin is used for "-") and builds the headers. A body that isn't JSON
+// is only accepted when the user set their own Content-Type.
+func (r *request) resolve(flags *terminal.Flags, userAgent string, stdin io.Reader) error {
+	if r.hasBody {
+		body, err := resolveBody(r.bodyArg, stdin)
+		if err != nil {
+			return err
+		}
+		r.payload = body
 	}
 
 	h, err := buildHeaders(r.payload, *flags.Headers, userAgent)
 	if err != nil {
-		return r, err
+		return err
 	}
 	r.headers = h
 
-	return r, nil
+	if r.payload != "" && !json.Valid([]byte(r.payload)) && h.Get("Content-Type") == "" {
+		return fmt.Errorf("%s is not valid JSON; to send it as is, set a Content-Type with -H", describeBody(r.bodyArg))
+	}
+
+	return nil
+}
+
+// resolveBody returns the body for an argument that is inline, "@path" (a file) or "-" (stdin).
+func resolveBody(arg string, stdin io.Reader) (string, error) {
+	body := arg
+
+	switch {
+	case arg == "-":
+		b, err := io.ReadAll(stdin)
+		if err != nil {
+			return "", fmt.Errorf("reading stdin: %w", err)
+		}
+		body = string(b)
+
+	case strings.HasPrefix(arg, "@"):
+		b, err := os.ReadFile(arg[1:])
+		if err != nil {
+			return "", fmt.Errorf("reading the body: %w", err)
+		}
+		body = string(b)
+	}
+
+	if strings.TrimSpace(body) == "" {
+		return "", fmt.Errorf("%s is empty", describeBody(arg))
+	}
+
+	return body, nil
+}
+
+// describeBody names where a body came from, for error messages.
+func describeBody(arg string) string {
+	switch {
+	case arg == "-":
+		return "stdin"
+	case strings.HasPrefix(arg, "@"):
+		return fmt.Sprintf("file %q", arg[1:])
+	default:
+		return fmt.Sprintf("payload %q", arg)
+	}
 }
 
 // buildHeaders layers the headers, lowest priority first: defaults, then the -H flags.
@@ -121,7 +188,7 @@ func buildHeaders(payload string, raw []string, userAgent string) (http.Header, 
 		h.Set("User-Agent", userAgent)
 	}
 
-	if payload != "" {
+	if payload != "" && json.Valid([]byte(payload)) {
 		h.Set("Content-Type", "application/json")
 	}
 

@@ -18,7 +18,7 @@ var helpSections = []helpSection{
 	{
 		title: "USAGE",
 		rows: []helpRow{
-			{"zz [flags] [method] <url> ['<json body>']", ""},
+			{"zz [flags] [method] <url> [body]", ""},
 			{"zz <command>", ""},
 		},
 	},
@@ -38,6 +38,17 @@ var helpSections = []helpSection{
 			{"get post put patch delete", "no method means get"},
 			{"head options", "show the status and headers only"},
 			{"g p pu pa d he opt o", "short forms"},
+		},
+	},
+	{
+		title: "BODY",
+		hint:  "the last argument",
+		width: 18,
+		rows: []helpRow{
+			{`'{"a":1}'`, "inline JSON; Content-Type: application/json is added"},
+			{"@body.json", "read the body from a file"},
+			{"-", "read the body from stdin"},
+			{"anything else", `needs your own -H "Content-Type: ..."`},
 		},
 	},
 	{

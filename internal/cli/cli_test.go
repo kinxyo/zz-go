@@ -1,7 +1,11 @@
 package cli
 
 import (
+	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kinxyo/zz-go/internal/config"
@@ -11,7 +15,20 @@ import (
 
 var local = config.Settings{Host: "127.0.0.1", Port: 8000}
 
-// flagsFor builds only the flags extract reads.
+// build runs both steps (extract, then resolve) with an empty stdin.
+func build(args []string, flags *terminal.Flags, settings config.Settings, userAgent string) (request, error) {
+	return buildWithStdin(args, flags, settings, userAgent, strings.NewReader(""))
+}
+
+func buildWithStdin(args []string, flags *terminal.Flags, settings config.Settings, userAgent string, stdin io.Reader) (request, error) {
+	r, err := extract(args, flags, settings)
+	if err != nil {
+		return r, err
+	}
+	return r, r.resolve(flags, userAgent, stdin)
+}
+
+// flagsFor builds only the flags extract and resolve read.
 func flagsFor(forceHTTP bool, headers ...string) *terminal.Flags {
 	return &terminal.Flags{ForceHttp: &forceHTTP, Headers: &headers}
 }
@@ -42,7 +59,7 @@ func TestExtract(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got, err := extract(c.args, c.flags, c.settings, "")
+			got, err := build(c.args, c.flags, c.settings, "")
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
@@ -61,9 +78,9 @@ func TestExtractErrors(t *testing.T) {
 		want string
 	}{
 		{"method only", []string{"get"}, "missing URL"},
-		{"empty body", []string{"post", "/x", ""}, `payload "" is not valid JSON`},
-		{"text body", []string{"post", "/x", "hello"}, `payload "hello" is not valid JSON`},
-		{"truncated json", []string{"post", "/x", `{"a":`}, `payload "{\"a\":" is not valid JSON`},
+		{"empty body", []string{"post", "/x", ""}, `payload "" is empty`},
+		{"text body", []string{"post", "/x", "hello"}, `payload "hello" is not valid JSON; to send it as is, set a Content-Type with -H`},
+		{"truncated json", []string{"post", "/x", `{"a":`}, `payload "{\"a\":" is not valid JSON; to send it as is, set a Content-Type with -H`},
 		{"flag after the url", []string{"/x", "-v"}, `"-v" looks like a flag; flags go before the arguments`},
 		{"flag after the method", []string{"get", "-v", "/x"}, `"-v" looks like a flag; flags go before the arguments`},
 		{"flag after a short method", []string{"he", "-u", "/x"}, `"-u" looks like a flag; flags go before the arguments`},
@@ -73,7 +90,7 @@ func TestExtractErrors(t *testing.T) {
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := extract(c.args, flagsFor(false), local, "")
+			_, err := build(c.args, flagsFor(false), local, "")
 			if err == nil {
 				t.Fatalf("want error %q, got none", c.want)
 			}
@@ -85,7 +102,7 @@ func TestExtractErrors(t *testing.T) {
 }
 
 func TestExtractHeaders(t *testing.T) {
-	got, err := extract([]string{"post", "/x", `{"a":1}`}, flagsFor(false, "Authorization: Bearer tok"), local, "")
+	got, err := build([]string{"post", "/x", `{"a":1}`}, flagsFor(false, "Authorization: Bearer tok"), local, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +116,7 @@ func TestExtractHeaders(t *testing.T) {
 }
 
 func TestExtractBadHeader(t *testing.T) {
-	if _, err := extract([]string{"/x"}, flagsFor(false, "nocolon"), local, ""); err == nil {
+	if _, err := build([]string{"/x"}, flagsFor(false, "nocolon"), local, ""); err == nil {
 		t.Error("want an error for a header without a colon")
 	}
 }
@@ -144,6 +161,12 @@ func TestBuildHeaders(t *testing.T) {
 
 	t.Run("no body means no default Content-Type", func(t *testing.T) {
 		if got := mustBuild(t, "").Get("Content-Type"); got != "" {
+			t.Errorf("Content-Type = %q", got)
+		}
+	})
+
+	t.Run("a body that isn't JSON gets no default Content-Type", func(t *testing.T) {
+		if got := mustBuild(t, "name=Alice").Get("Content-Type"); got != "" {
 			t.Errorf("Content-Type = %q", got)
 		}
 	})
@@ -265,9 +288,9 @@ func TestFailed(t *testing.T) {
 
 func TestExtractEmptyURL(t *testing.T) {
 	for _, args := range [][]string{{""}, {"  "}, {"get", ""}, {"post", "   "}} {
-		_, err := extract(args, flagsFor(false), local, "")
+		_, err := build(args, flagsFor(false), local, "")
 		if err == nil || err.Error() != "missing URL" {
-			t.Errorf("extract(%q) error = %v; want \"missing URL\"", args, err)
+			t.Errorf("build(%q) error = %v; want \"missing URL\"", args, err)
 		}
 	}
 }
@@ -276,7 +299,7 @@ func TestExtractNewMethods(t *testing.T) {
 	cases := map[string]string{"head": "HEAD", "he": "HEAD", "options": "OPTIONS", "opt": "OPTIONS", "o": "OPTIONS"}
 
 	for word, want := range cases {
-		got, err := extract([]string{word, "/x"}, flagsFor(false), local, "")
+		got, err := build([]string{word, "/x"}, flagsFor(false), local, "")
 		if err != nil {
 			t.Errorf("%s: %v", word, err)
 			continue
@@ -316,7 +339,7 @@ func TestUserAgent(t *testing.T) {
 	})
 
 	t.Run("reaches the request through extract", func(t *testing.T) {
-		r, err := extract([]string{"/x"}, flagsFor(false), local, "zz/1.2")
+		r, err := build([]string{"/x"}, flagsFor(false), local, "zz/1.2")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -324,4 +347,154 @@ func TestUserAgent(t *testing.T) {
 			t.Errorf("User-Agent = %q", got)
 		}
 	})
+}
+
+func TestResolveBody(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) string {
+		t.Helper()
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	jsonFile := write("body.json", `{"name":"Alice"}`+"\n")
+	emptyFile := write("empty.json", "")
+	blankFile := write("blank.json", "  \n")
+
+	cases := []struct {
+		name    string
+		arg     string
+		stdin   string
+		want    string
+		wantErr string // a part of the message
+	}{
+		{"inline", `{"a":1}`, "", `{"a":1}`, ""},
+		{"inline text", "hello", "", "hello", ""},
+		{"stdin", "-", "{\"a\":1}\n", "{\"a\":1}\n", ""},
+		{"file", "@" + jsonFile, "", `{"name":"Alice"}` + "\n", ""},
+		{"inline empty", "", "", "", `payload "" is empty`},
+		{"inline blank", "   ", "", "", "is empty"},
+		{"stdin empty", "-", "", "", "stdin is empty"},
+		{"stdin blank", "-", " \n", "", "stdin is empty"},
+		{"file empty", "@" + emptyFile, "", "", "is empty"},
+		{"file blank", "@" + blankFile, "", "", "is empty"},
+		{"file missing", "@" + filepath.Join(dir, "nope.json"), "", "", "reading the body"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := resolveBody(c.arg, strings.NewReader(c.stdin))
+
+			if c.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+					t.Fatalf("error = %v; want one containing %q", err, c.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != c.want {
+				t.Errorf("got %q; want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestBodyFromFileAndStdin(t *testing.T) {
+	dir := t.TempDir()
+	jsonFile := filepath.Join(dir, "body.json")
+	textFile := filepath.Join(dir, "note.txt")
+	os.WriteFile(jsonFile, []byte(`{"name":"Alice"}`), 0o644)
+	os.WriteFile(textFile, []byte("just some text"), 0o644)
+
+	t.Run("json file gets the default Content-Type", func(t *testing.T) {
+		r, err := build([]string{"post", "/x", "@" + jsonFile}, flagsFor(false), local, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.payload != `{"name":"Alice"}` || r.headers.Get("Content-Type") != "application/json" {
+			t.Errorf("payload=%q content-type=%q", r.payload, r.headers.Get("Content-Type"))
+		}
+	})
+
+	t.Run("json from stdin gets the default Content-Type", func(t *testing.T) {
+		r, err := buildWithStdin([]string{"post", "/x", "-"}, flagsFor(false), local, "", strings.NewReader(`{"a":[1,2]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.payload != `{"a":[1,2]}` || r.headers.Get("Content-Type") != "application/json" {
+			t.Errorf("payload=%q content-type=%q", r.payload, r.headers.Get("Content-Type"))
+		}
+	})
+
+	t.Run("text file without a Content-Type is refused and names the file", func(t *testing.T) {
+		_, err := build([]string{"post", "/x", "@" + textFile}, flagsFor(false), local, "")
+		if err == nil {
+			t.Fatal("want an error")
+		}
+		for _, part := range []string{"file", textFile, "not valid JSON", "Content-Type"} {
+			if !strings.Contains(err.Error(), part) {
+				t.Errorf("error %q should mention %q", err, part)
+			}
+		}
+	})
+
+	t.Run("text file with a Content-Type is sent as is", func(t *testing.T) {
+		r, err := build([]string{"post", "/x", "@" + textFile}, flagsFor(false, "Content-Type: text/plain"), local, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.payload != "just some text" || r.headers.Get("Content-Type") != "text/plain" {
+			t.Errorf("payload=%q content-type=%q", r.payload, r.headers.Get("Content-Type"))
+		}
+	})
+
+	t.Run("missing file", func(t *testing.T) {
+		if _, err := build([]string{"post", "/x", "@" + filepath.Join(dir, "nope")}, flagsFor(false), local, ""); err == nil {
+			t.Error("want an error")
+		}
+	})
+}
+
+func TestNonJSONInlineBody(t *testing.T) {
+	t.Run("with a Content-Type it is sent as is, with no default added", func(t *testing.T) {
+		r, err := build([]string{"post", "/x", "name=Alice&age=3"}, flagsFor(false, "Content-Type: application/x-www-form-urlencoded"), local, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.payload != "name=Alice&age=3" || r.headers.Get("Content-Type") != "application/x-www-form-urlencoded" {
+			t.Errorf("payload=%q content-type=%q", r.payload, r.headers.Get("Content-Type"))
+		}
+	})
+
+	t.Run("without a Content-Type it is refused", func(t *testing.T) {
+		_, err := build([]string{"post", "/x", "name=Alice"}, flagsFor(false), local, "")
+		if err == nil || !strings.Contains(err.Error(), "set a Content-Type with -H") {
+			t.Errorf("error = %v", err)
+		}
+	})
+
+	t.Run("a bare number is valid JSON", func(t *testing.T) {
+		r, err := build([]string{"post", "/x", "-5"}, flagsFor(false), local, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if r.payload != "-5" || r.headers.Get("Content-Type") != "application/json" {
+			t.Errorf("payload=%q content-type=%q", r.payload, r.headers.Get("Content-Type"))
+		}
+	})
+}
+
+func TestNoBodyMeansNoPayload(t *testing.T) {
+	r, err := build([]string{"/x"}, flagsFor(false), local, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.hasBody || r.payload != "" || r.headers.Get("Content-Type") != "" {
+		t.Errorf("hasBody=%v payload=%q content-type=%q", r.hasBody, r.payload, r.headers.Get("Content-Type"))
+	}
 }
