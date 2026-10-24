@@ -48,6 +48,7 @@ var helpSections = []helpSection{
 			{`'{"a":1}'`, "JSON: application/json"},
 			{`'{a: 1}'`, `loose JSON, quoted for you: {"a": 1}`},
 			{"'<a>...</a>'", "XML: application/xml"},
+			{"@body.json", "read from a file (@~/ works), then the same as above"},
 			{"anything else", "sent as is, with no Content-Type"},
 		},
 	},

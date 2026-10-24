@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -72,6 +74,43 @@ func isLoopback(url string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
+}
+
+// ReadBody replaces a body of "@path" with the contents of that file, sent exactly as it is,
+// final newline included. A leading ~/ in the path is the home directory. Any other body is
+// left alone. An empty or blank file is an error: it's almost always a mistake.
+func (r *Request) ReadBody() error {
+	if !strings.HasPrefix(r.Body, "@") {
+		return nil
+	}
+
+	name := r.Body[1:]
+	b, err := os.ReadFile(expandHome(name))
+	if err != nil {
+		return fmt.Errorf("reading the body: %w", err)
+	}
+
+	if strings.TrimSpace(string(b)) == "" {
+		return fmt.Errorf("body file %q is empty", name)
+	}
+
+	r.Body = string(b)
+	return nil
+}
+
+// expandHome turns a leading ~/ into the home directory. The shell does that for a word that
+// starts with ~, but not for the part after an @.
+func expandHome(path string) string {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+
+	return filepath.Join(home, path[1:])
 }
 
 // ParseBody returns the Content-Type of r.Body, or "" when it can't tell. r.Body only

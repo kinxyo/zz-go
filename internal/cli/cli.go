@@ -22,7 +22,12 @@ func Run(args []string, flags *terminal.Flags, conf config.Settings) {
 	// 1. Parse URL
 	r.MakeURL(conf.BaseURL(), *flags.ForceHttp)
 
-	// 2. Parse Body (-r sends it as typed, with no Content-Type detected)
+	// 2. Read Body from a file, for @path (even with -r: -r is about what's done to the body)
+	if err := r.ReadBody(); err != nil {
+		terminal.FatalWith(exitUsage, "%s\n", err)
+	}
+
+	// 3. Parse Body (-r sends it as typed, with no Content-Type detected)
 	bodyType := ""
 	if !*flags.Raw {
 		bodyType, err = r.ParseBody()
@@ -31,25 +36,25 @@ func Run(args []string, flags *terminal.Flags, conf config.Settings) {
 		}
 	}
 
-	// 3. Parse Headers
+	// 4. Parse Headers
 	if err := r.BuildHeaders(bodyType, *flags.RequestHeaders, conf.UserAgent); err != nil {
 		terminal.FatalWith(exitUsage, "%s\n", err)
 	}
 
-	// 4. Set Timeout
+	// 5. Set Timeout
 	seconds := conf.Timeout
 	if *flags.Timeout >= 0 { // -m wins when it was given (-1 means it wasn't), otherwise the config's.
 		seconds = *flags.Timeout
 	}
 	r.Timeout = time.Duration(seconds) * time.Second
 
-	// 5. Make network request
+	// 6. Make network request
 	res, err := r.CURL()
 	if err != nil {
 		terminal.FatalWith(exitCode(err), "%s\n", err)
 	}
 
-	// 6. Aftermath
+	// 7. Aftermath
 	shown := res.Print(printOpts(flags, r.Method))
 
 	if *flags.Fail && res.StatusCode >= 400 {

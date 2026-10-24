@@ -124,6 +124,18 @@ zz -H "Content-Type: application/x-www-form-urlencoded" post /login 'user=alice&
 zz -r post /raw '{not: json}'
 ```
 
+For a body that's too long to type, put it in a file and pass `@` and its path:
+
+```sh
+zz post /users @body.json
+zz post /users @~/bodies/alice.json     # ~/ works after the @ too
+```
+
+The file is sent exactly as it is, including its final newline (like `curl --data-binary`;
+`curl -d @file` strips newlines instead), and goes through the same Content-Type detection and
+JSON fix-ups as a typed body. `-r` still reads the file but sends it untouched. An empty file is
+an error. Because of `@`, a typed body can't start with `@`.
+
 ### Flags
 
 | Flag | |
@@ -175,6 +187,7 @@ POST with a JSON body:
 zz post /msg '{"message":"Hello!"}'
 zz -H "X-Api-Key: abc" post /users '{"name":"Alice"}'
 zz post /users '{name: Alice, tags: [a, b]}'    # loose JSON, quoted for you
+zz post /users @body.json                       # the body from a file
 ```
 
 A local server over plain http:
@@ -256,8 +269,6 @@ Where curl has a code for the same situation, zz uses the same number.
 
 - `zz run [file]` reads a `.zz` collection file and prints its tokens. It does not send the requests.
 - Running `zz` with no arguments is a placeholder; there is no interactive mode yet.
-- A body from a file (`@body.json`) or from stdin (`-`). For now such an argument is sent as
-  plain text.
 
 ## Development
 
