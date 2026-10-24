@@ -2,6 +2,8 @@ package network
 
 import (
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -62,6 +64,17 @@ func TestMakeURL(t *testing.T) {
 		{"bare host is https", "httpbin.org/json", false, "https://httpbin.org/json"},
 		{"bare host with -h is http", "httpbin.org/json", true, "http://httpbin.org/json"},
 		{"host and port with -h", "localhost:3000/h", true, "http://localhost:3000/h"},
+		{"localhost is http", "localhost:8000/x", false, "http://localhost:8000/x"},
+		{"localhost without a port", "localhost", false, "http://localhost"},
+		{"localhost in capitals", "LOCALHOST:3000", false, "http://LOCALHOST:3000"},
+		{"127.0.0.1 is http", "127.0.0.1:3000/x?q=1", false, "http://127.0.0.1:3000/x?q=1"},
+		{"all of 127/8 is loopback", "127.0.1.1/x", false, "http://127.0.1.1/x"},
+		{"ipv6 loopback with a port", "[::1]:3000/x", false, "http://[::1]:3000/x"},
+		{"ipv6 loopback without a port", "[::1]/x", false, "http://[::1]/x"},
+		{"a name that starts with localhost isn't local", "localhost.example.com/x", false, "https://localhost.example.com/x"},
+		{"a name that starts with 127 isn't local", "127.0.0.1.nip.io/x", false, "https://127.0.0.1.nip.io/x"},
+		{"a LAN address stays https", "192.168.1.5:8000/x", false, "https://192.168.1.5:8000/x"},
+		{"https to localhost is kept", "https://localhost:8443/x", false, "https://localhost:8443/x"},
 		{"http left alone", "http://x.com/a", false, "http://x.com/a"},
 		{"http left alone with -h", "http://x.com/a", true, "http://x.com/a"},
 		{"https left alone", "https://x.com/a", false, "https://x.com/a"},
@@ -278,5 +291,105 @@ func TestBuildHeaders(t *testing.T) {
 				t.Errorf("Header = %v; want it left unset on an error", r.Header)
 			}
 		})
+	}
+}
+
+func TestReadBody(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, content string) string {
+		t.Helper()
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+
+	jsonFile := write("body.json", `{"name":"Alice"}`+"\n")
+	looseFile := write("loose.json", "{name: Alice}")
+	emptyFile := write("empty.json", "")
+	blankFile := write("blank.json", "  \n")
+
+	cases := []struct {
+		name    string
+		body    string
+		want    string
+		wantErr string // a part of the message
+	}{
+		{"inline is left alone", `{"a":1}`, `{"a":1}`, ""},
+		{"inline text is left alone", "hello", "hello", ""},
+		{"no body", "", "", ""},
+		{"- is plain text, not stdin", "-", "-", ""},
+		{"file, final newline kept", "@" + jsonFile, `{"name":"Alice"}` + "\n", ""},
+		{"file is read as is, not fixed up yet", "@" + looseFile, "{name: Alice}", ""},
+		{"empty file", "@" + emptyFile, "", `body file "` + emptyFile + `" is empty`},
+		{"blank file", "@" + blankFile, "", "is empty"},
+		{"missing file", "@" + filepath.Join(dir, "nope.json"), "", "reading the body"},
+		{"a directory", "@" + dir, "", "reading the body"},
+		{"@ alone", "@", "", "reading the body"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := Request{Body: c.body}
+			err := r.ReadBody()
+
+			if c.wantErr != "" {
+				if err == nil || !strings.Contains(err.Error(), c.wantErr) {
+					t.Fatalf("error = %v; want one containing %q", err, c.wantErr)
+				}
+				if r.Body != c.body {
+					t.Errorf("Body = %q; want it left as %q on an error", r.Body, c.body)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if r.Body != c.want {
+				t.Errorf("Body = %q; want %q", r.Body, c.want)
+			}
+		})
+	}
+}
+
+func TestReadBodyUnderHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)        // unix
+	t.Setenv("USERPROFILE", home) // windows
+
+	if err := os.WriteFile(filepath.Join(home, "body.json"), []byte(`{"a":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := Request{Body: "@~/body.json"}
+	if err := r.ReadBody(); err != nil {
+		t.Fatal(err)
+	}
+	if r.Body != `{"a":1}` {
+		t.Errorf("Body = %q", r.Body)
+	}
+}
+
+func TestExpandHome(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)        // unix
+	t.Setenv("USERPROFILE", home) // windows
+
+	cases := []struct{ in, want string }{
+		{"~/body.json", filepath.Join(home, "body.json")},
+		{"~/a/b.json", filepath.Join(home, "a", "b.json")},
+		{"~", home},
+		{"body.json", "body.json"},
+		{"./body.json", "./body.json"},
+		{"/abs/body.json", "/abs/body.json"},
+		{"~other/body.json", "~other/body.json"}, // another user's home isn't supported
+		{"a/~/b", "a/~/b"},
+	}
+
+	for _, c := range cases {
+		if got := expandHome(c.in); got != c.want {
+			t.Errorf("expandHome(%q) = %q; want %q", c.in, got, c.want)
+		}
 	}
 }

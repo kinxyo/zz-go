@@ -366,6 +366,43 @@ func TestE2ERequest(t *testing.T) {
 		}
 	})
 
+	t.Run("@file sends the file exactly, final newline included", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "body.json")
+		os.WriteFile(path, []byte("{\"name\":\"Alice\"}\n"), 0o644)
+
+		got := e.echo(t, "", "post", "/echo", "@"+path)
+		if got.Body != "{\"name\":\"Alice\"}\n" || got.ContentType != "application/json" {
+			t.Errorf("server saw %+v", got)
+		}
+	})
+
+	t.Run("@file with loose JSON is fixed up like a typed body", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "loose.json")
+		os.WriteFile(path, []byte("{name: Alice}\n"), 0o644)
+
+		if got := e.echo(t, "", "post", "/echo", "@"+path); got.Body != `{"name": "Alice"}` {
+			t.Errorf("body = %q", got.Body)
+		}
+	})
+
+	t.Run("@~/ is the home directory", func(t *testing.T) {
+		os.WriteFile(filepath.Join(e.dir, "home-body.json"), []byte(`{"from":"home"}`), 0o644)
+
+		if got := e.echo(t, "", "post", "/echo", "@~/home-body.json"); got.Body != `{"from":"home"}` {
+			t.Errorf("body = %q", got.Body)
+		}
+	})
+
+	t.Run("-r still reads @file, and sends it untouched", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "loose.json")
+		os.WriteFile(path, []byte("{name: Alice}\n"), 0o644)
+
+		got := e.echo(t, "", "-r", "post", "/echo", "@"+path)
+		if got.Body != "{name: Alice}\n" || got.ContentType != "" {
+			t.Errorf("server saw %+v", got)
+		}
+	})
+
 	t.Run("plain text is sent as is, with no Content-Type", func(t *testing.T) {
 		got := e.echo(t, "", "post", "/echo", "hello")
 		if got.ContentType != "" || got.Body != "hello" {
@@ -387,9 +424,9 @@ func TestE2ERequest(t *testing.T) {
 		}
 	})
 
-	t.Run("-d reaches a host typed without a scheme over http", func(t *testing.T) {
-		u, _ := url.Parse(e.srv.URL)
-		if got := e.echo(t, "", "-d", u.Host+"/echo"); got.Method != "GET" {
+	t.Run("a local host typed without a scheme is reached over http", func(t *testing.T) {
+		u, _ := url.Parse(e.srv.URL) // 127.0.0.1:<port>
+		if got := e.echo(t, "", "p", u.Host+"/echo", `{content: hi}`); got.Method != "POST" || got.Body != `{"content": "hi"}` {
 			t.Errorf("server saw %+v", got)
 		}
 	})
@@ -417,6 +454,7 @@ func TestE2EExitCodes(t *testing.T) {
 		{"success", []string{"/json"}, 0, ""},
 		{"missing URL", []string{"get", ""}, 2, "missing URL"},
 		{"bad body", []string{"post", "/echo", "{content: }"}, 2, "not valid JSON"},
+		{"missing @file", []string{"post", "/echo", "@nope.json"}, 2, "reading the body"},
 		{"bad -H", []string{"-H", "nocolon", "/json"}, 2, `invalid value "nocolon"`},
 		{"unknown flag", []string{"-z", "/json"}, 2, "flag provided but not defined: -z"},
 		{"bad -m", []string{"-m", "1.5", "/json"}, 2, "whole number of seconds"},

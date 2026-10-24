@@ -79,7 +79,8 @@ zz [flags] [method] <url> [body]
 |--------------------------|-------------------------------------------|
 | `/users`                 | `http://127.0.0.1:8000/users` (see [Config](#config)) |
 | `httpbin.org/json`       | `https://httpbin.org/json`                |
-| `-d localhost:3000/x`    | `http://localhost:3000/x`                 |
+| `localhost:3000/x`       | `http://localhost:3000/x` (`localhost`, `127.x.x.x` and `::1` are plain http) |
+| `-d 192.168.1.5:8000/x`  | `http://192.168.1.5:8000/x`               |
 | `https://api.example.com/x` | used as typed                          |
 
 A query string is part of the URL: `zz '/search?q=go&page=2'`. Quote it, or the shell treats `&` as
@@ -123,6 +124,18 @@ zz -H "Content-Type: application/x-www-form-urlencoded" post /login 'user=alice&
 zz -r post /raw '{not: json}'
 ```
 
+For a body that's too long to type, put it in a file and pass `@` and its path:
+
+```sh
+zz post /users @body.json
+zz post /users @~/bodies/alice.json     # ~/ works after the @ too
+```
+
+The file is sent exactly as it is, including its final newline (like `curl --data-binary`;
+`curl -d @file` strips newlines instead), and goes through the same Content-Type detection and
+JSON fix-ups as a typed body. `-r` still reads the file but sends it untouched. An empty file is
+an error. Because of `@`, a typed body can't start with `@`.
+
 ### Flags
 
 | Flag | |
@@ -135,7 +148,7 @@ zz -r post /raw '{not: json}'
 | `-i` | Show the response headers. |
 | `-p` | Pretty-print a JSON body. Without it the body is printed exactly as received. |
 | `-f` | Exit with status 22 if the response is a 4xx or 5xx. Unlike `curl --fail`, the body is still printed, so you can read the error. |
-| `-d` | Use `http://` for a URL typed without a scheme. |
+| `-d` | Use `http://` for a URL typed without a scheme. Local hosts already get it. |
 | `-r` | Send the body exactly as typed: no JSON fix-ups, no Content-Type detected. |
 | `-m <seconds>` | Time limit for the whole request, in whole seconds; `0` means no limit. Overrides `timeout` in the [config](#config). |
 
@@ -174,13 +187,15 @@ POST with a JSON body:
 zz post /msg '{"message":"Hello!"}'
 zz -H "X-Api-Key: abc" post /users '{"name":"Alice"}'
 zz post /users '{name: Alice, tags: [a, b]}'    # loose JSON, quoted for you
+zz post /users @body.json                       # the body from a file
 ```
 
 A local server over plain http:
 
 ```sh
 zz /api                         # http://127.0.0.1:8000/api
-zz -d localhost:3000/health     # http://localhost:3000/health
+zz localhost:3000/health        # http://localhost:3000/health
+zz -d 192.168.1.5:8000/health   # http on another machine
 ```
 
 Read a JSON response, or save it exactly as received:
@@ -254,8 +269,6 @@ Where curl has a code for the same situation, zz uses the same number.
 
 - `zz run [file]` reads a `.zz` collection file and prints its tokens. It does not send the requests.
 - Running `zz` with no arguments is a placeholder; there is no interactive mode yet.
-- A body from a file (`@body.json`) or from stdin (`-`). For now such an argument is sent as
-  plain text.
 
 ## Development
 

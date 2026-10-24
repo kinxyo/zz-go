@@ -3,7 +3,10 @@ package network
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -39,6 +42,7 @@ func (r *Request) MakeURL(base string, forceHTTP bool) {
 	// 1. zz /api/users (local, from the config)
 	// 2. zz httpbin.org/json (https)
 	// 3. zz -d httpbin.org/json (http)
+	// 4. zz localhost:3000/x (http: a server on this machine is plain http)
 	// A URL that already has a scheme is left alone, even with -d.
 
 	switch {
@@ -46,11 +50,67 @@ func (r *Request) MakeURL(base string, forceHTTP bool) {
 		r.URL = base + r.URL
 	case strings.HasPrefix(r.URL, "http://") || strings.HasPrefix(r.URL, "https://"):
 		// used as typed
-	case forceHTTP:
+	case forceHTTP, isLoopback(r.URL):
 		r.URL = "http://" + r.URL
 	default:
 		r.URL = "https://" + r.URL
 	}
+}
+
+// isLoopback reports whether a URL typed without a scheme points at this machine:
+// localhost, 127.x.x.x or ::1, with or without a port.
+func isLoopback(url string) bool {
+	host := url
+	if i := strings.IndexAny(host, "/?#"); i >= 0 {
+		host = host[:i]
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]") // [::1] without a port
+
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// ReadBody replaces a body of "@path" with the contents of that file, sent exactly as it is,
+// final newline included. A leading ~/ in the path is the home directory. Any other body is
+// left alone. An empty or blank file is an error: it's almost always a mistake.
+func (r *Request) ReadBody() error {
+	if !strings.HasPrefix(r.Body, "@") {
+		return nil
+	}
+
+	name := r.Body[1:]
+	b, err := os.ReadFile(expandHome(name))
+	if err != nil {
+		return fmt.Errorf("reading the body: %w", err)
+	}
+
+	if strings.TrimSpace(string(b)) == "" {
+		return fmt.Errorf("body file %q is empty", name)
+	}
+
+	r.Body = string(b)
+	return nil
+}
+
+// expandHome turns a leading ~/ into the home directory. The shell does that for a word that
+// starts with ~, but not for the part after an @.
+func expandHome(path string) string {
+	if path != "~" && !strings.HasPrefix(path, "~/") {
+		return path
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return path
+	}
+
+	return filepath.Join(home, path[1:])
 }
 
 // ParseBody returns the Content-Type of r.Body, or "" when it can't tell. r.Body only
