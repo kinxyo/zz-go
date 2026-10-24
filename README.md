@@ -68,7 +68,7 @@ make prod
 ## Use
 
 ```
-zz [flags] [method] <url> ['<json body>']
+zz [flags] [method] <url> [body]
 ```
 
 **Flags go anywhere.** `zz -v /users` and `zz /users -v` are the same request.
@@ -88,51 +88,40 @@ A query string is part of the URL: `zz '/search?q=go&page=2'`. Quote it, or the 
 ### Methods
 
 `get`, `post`, `put`, `patch`, `delete`, `head` and `options`, in any case, with short forms: `g`,
-`p` (or `po`), `pu`, `pa`, `d`, `he`, `opt` (or `o`). With no method, the request is a GET, or a
-POST if you give a body (`zz /users @body.json` posts it). A method you type always wins, so
-`zz get /x @body.json` stays a GET.
+`p` (or `po`), `pu`, `pa`, `d`, `he`, `opt` (or `o`). With no method the request is a GET, even
+when you give a body, so type the method to send anything else: `zz p /users '{name: Alice}'`. A
+first word that isn't a method is taken as the URL, so a typo like `zz gte /x` asks for
+`https://gte`.
 
 `head` and `options` replies have no body worth reading, so zz always shows their status and
 headers (as if you had passed `-s -i`).
 
 ### Body
 
-The last argument is the body. It can be given three ways:
+The argument after the URL is the body. Quote it in single quotes, so the shell passes it as one
+argument and leaves `{`, `"` and `$` alone.
 
-| You type | The body is |
-|----------|-------------|
-| `'{"a":1}'` | the text you typed |
-| `@body.json` | the contents of that file (`@~/body.json` works too) |
-| `-` | whatever is on stdin |
+zz looks at the body to set the `Content-Type`:
 
-A JSON body gets `Content-Type: application/json` automatically. To avoid quoting JSON in the
-shell at all, put it in a file, or use a heredoc (the quoted `'EOF'` means nothing inside is
-treated specially, so no escaping):
+| Body | Content-Type |
+|------|--------------|
+| `'{"a":1}'`, `'[1,2]'` | `application/json` |
+| `'{a: 1}'` | `application/json`, after quoting it into `{"a": 1}` (see [Why](#why)) |
+| one JSON value per line | `application/x-ndjson` |
+| starts with `<` | `application/xml` (not checked) |
+| anything else, like `'hello'` or `'a=1&b=2'` | none |
 
-```sh
-zz post /users @body.json
+Valid JSON is sent byte for byte, spacing included; only loose JSON is rewritten. A body that
+starts with `{` or `[` but can't be made into JSON is an error that says what's wrong, so a typo
+doesn't reach the server.
 
-zz post /users - <<'EOF'
-{"name": "Alice", "tags": ["a", "b"]}
-EOF
-```
-
-A body that isn't valid JSON is only sent if you set your own `Content-Type`; without one, zz
-stops with an error, which catches typos like `zz post /users hello`. If the `Content-Type` you set
-is a JSON one (`application/json`, or anything ending in `+json`), the body must still be valid
-JSON, so a typo is caught there too. Your header also replaces the default for JSON bodies:
+Your own `-H "Content-Type: ..."` always replaces the detected one, and `-r` turns detection off:
+the body goes out exactly as typed, with no Content-Type unless you set one.
 
 ```sh
 zz -H "Content-Type: application/x-www-form-urlencoded" post /login 'user=alice&pass=secret'
-zz -H "Content-Type: application/vnd.api+json" post /things '{"data":{}}'
+zz -r post /raw '{not: json}'
 ```
-
-A body from a file or stdin is sent exactly as it is, including its final newline (a heredoc always
-ends with one). That matches `curl --data-binary`; `curl -d @file` strips newlines instead.
-
-An empty body (an empty file, empty stdin, or `""`) is an error. A body that is text starting with
-`@` would be read as a file name, so send it through stdin instead:
-`printf '@alice hello' | zz -H "Content-Type: text/plain" post /x -`.
 
 ### Flags
 
@@ -150,8 +139,8 @@ An empty body (an empty file, empty stdin, or `""`) is an error. A body that is 
 | `-r` | Send the body exactly as typed: no JSON fix-ups, no Content-Type detected. |
 | `-m <seconds>` | Time limit for the whole request, in whole seconds; `0` means no limit. Overrides `timeout` in the [config](#config). |
 
-Requests send `User-Agent: zz/<version>` unless you set your own with `-H`. An empty value
-(`-H "User-Agent:"`) sends no User-Agent at all.
+Requests send `User-Agent: zz/<version>` unless you set your own: `userAgent` in the
+[config](#config) for every request, or `-H` for one. An empty `-H "User-Agent:"` sends none.
 
 Colors appear only when the output is a terminal; they are off when piped or redirected, or when
 `NO_COLOR` is set.
@@ -172,7 +161,7 @@ zz httpbin.org/get
 zz -v get https://api.github.com/users/octocat
 ```
 
-With headers (flags go first):
+With headers:
 
 ```sh
 zz -H "Authorization: Bearer $TOKEN" /api
@@ -184,7 +173,7 @@ POST with a JSON body:
 ```sh
 zz post /msg '{"message":"Hello!"}'
 zz -H "X-Api-Key: abc" post /users '{"name":"Alice"}'
-zz post /users @body.json
+zz post /users '{name: Alice, tags: [a, b]}'    # loose JSON, quoted for you
 ```
 
 A local server over plain http:
@@ -218,8 +207,9 @@ The first request creates `~/.config/zz/setting.json` (on macOS
 `host` and `port` decide where `/path` URLs go. `timeout` is the time limit for a whole request
 in whole seconds, including reading the body; `0` means no limit, and `-m` overrides it for one
 request. `userAgent` replaces the `zz/<version>` User-Agent for every request; empty means
-`zz/<version>`. A key you leave out keeps its default. If the file can't be read, or a value is wrong (a
-port out of range, a negative or non-whole timeout), zz prints a warning and uses the defaults.
+`zz/<version>`. A key you leave out keeps its default. If the file can't be read, or a value is
+wrong (a port out of range, a negative or non-whole timeout), zz prints a warning and uses the
+defaults.
 
 ## Output and errors
 
@@ -251,7 +241,7 @@ Where curl has a code for the same situation, zz uses the same number.
 |------|---------|------|
 | 0 | A response arrived (any status, unless `-f`) | 0 |
 | 1 | Any other failure | |
-| 2 | Bad arguments: missing URL, bad `-H`, bad body, unknown method or flag, malformed URL | |
+| 2 | Bad arguments: missing URL, bad `-H`, bad body, unknown flag, malformed URL | |
 | 6 | No such host | 6 |
 | 7 | Connection refused | 7 |
 | 22 | `-f` and the status was 4xx or 5xx | 22 |
@@ -264,13 +254,15 @@ Where curl has a code for the same situation, zz uses the same number.
 
 - `zz run [file]` reads a `.zz` collection file and prints its tokens. It does not send the requests.
 - Running `zz` with no arguments is a placeholder; there is no interactive mode yet.
-- Flags after the URL aren't supported.
+- A body from a file (`@body.json`) or from stdin (`-`). For now such an argument is sent as
+  plain text.
 
 ## Development
 
 ```sh
 make test    # go vet + go test -race
 make run     # build and install to ~/bin
+make reset   # delete setting.json; the next request writes the defaults
 make deps    # which package imports which
 ```
 
@@ -278,9 +270,9 @@ The tests have two layers. Unit tests sit next to the code they test. The end-to
 `cmd/zz/e2e_test.go` build the real `zz` once and run it against a local test server, each test
 with its own config directory, checking stdout, stderr, the exit code and what the server
 received. `go test -short ./...` skips them. A unit test in `internal/terminal` checks that every
-flag the program has is listed in the help and in the flag table above, and the other way round. Anything that needs a real
-terminal (colors, refusing binary output) is covered only by unit tests of the helpers that decide
-it.
+flag the program has is listed in the help and in the flag table above, and the other way round.
+Anything that needs a real terminal (colors, refusing binary output) is covered only by unit tests
+of the helpers that decide it.
 
 A release build stamps its version into the binary. To do the same by hand:
 

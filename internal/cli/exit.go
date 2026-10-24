@@ -32,7 +32,7 @@ type ExitCode struct {
 var ExitCodes = []ExitCode{
 	{exitOK, "a response arrived (any status, unless -f)"},
 	{exitFailure, "any other failure"},
-	{exitUsage, "bad arguments: missing URL, bad -H, bad body, unknown method or flag, malformed URL"},
+	{exitUsage, "bad arguments: missing URL, bad -H, bad body, unknown flag, malformed URL"},
 	{exitNoSuchHost, "no such host"},
 	{exitRefused, "connection refused"},
 	{exitHTTPError, "-f and the status was 4xx or 5xx"},
