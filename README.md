@@ -210,13 +210,15 @@ The first request creates `~/.config/zz/setting.json` (on macOS
 {
   "host": "127.0.0.1",
   "port": 8000,
-  "timeout": 30
+  "timeout": 30,
+  "userAgent": ""
 }
 ```
 
 `host` and `port` decide where `/path` URLs go. `timeout` is the time limit for a whole request
 in whole seconds, including reading the body; `0` means no limit, and `-m` overrides it for one
-request. A key you leave out keeps its default. If the file can't be read, or a value is wrong (a
+request. `userAgent` replaces the `zz/<version>` User-Agent for every request; empty means
+`zz/<version>`. A key you leave out keeps its default. If the file can't be read, or a value is wrong (a
 port out of range, a negative or non-whole timeout), zz prints a warning and uses the defaults.
 
 ## Output and errors

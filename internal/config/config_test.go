@@ -228,3 +228,30 @@ func TestLoadUserAgent(t *testing.T) {
 		}
 	})
 }
+
+func TestFirstRunFileHasAnEmptyUserAgent(t *testing.T) {
+	path := isolate(t)
+
+	if _, err := Load(testUA); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), `"userAgent": ""`) {
+		t.Errorf("new file should have an empty userAgent, not the version:\n%s", data)
+	}
+}
+
+func TestUpgradeChangesTheUserAgent(t *testing.T) {
+	isolate(t)
+
+	if _, err := Load("zz/1.2"); err != nil { // the first run writes the file
+		t.Fatal(err)
+	}
+	got, err := Load("zz/1.3") // the same file, after an upgrade
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.UserAgent != "zz/1.3" {
+		t.Errorf("UserAgent = %q; want zz/1.3", got.UserAgent)
+	}
+}

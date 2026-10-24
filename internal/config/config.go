@@ -14,8 +14,8 @@ import (
 type Settings struct {
 	Host      string `json:"host"`
 	Port      int    `json:"port"`
-	Timeout   int    `json:"timeout"` // seconds for a whole request; 0 means no limit
-	UserAgent string `json:"userAgent"`
+	Timeout   int    `json:"timeout"`   // seconds for a whole request; 0 means no limit
+	UserAgent string `json:"userAgent"` // "" means zz/<version>, filled in by Load
 }
 
 func defaults() Settings {
@@ -27,13 +27,21 @@ func defaults() Settings {
 	}
 }
 
-// Load returns the settings from the config file. If the file doesn't exist yet,
-// it is created with the defaults. Keys missing from the file keep their defaults.
+// Load returns the settings from the config file, with ua as the User-Agent when the file
+// doesn't set one. ua is filled in only here, never written to the file, so an upgrade's
+// zz/<version> takes effect even in a file written by an older zz.
 func Load(ua string) (Settings, error) {
-	// def is what Load returns when it can't use the file: the defaults, with the User-Agent.
-	def := defaults()
-	def.UserAgent = ua
-	s := def
+	s, err := load()
+	if s.UserAgent == "" {
+		s.UserAgent = ua
+	}
+	return s, err
+}
+
+// load reads the config file. If the file doesn't exist yet, it is created with the
+// defaults. Keys missing from the file keep their defaults.
+func load() (Settings, error) {
+	s := defaults()
 
 	path, err := getPath()
 	if err != nil {
@@ -49,15 +57,15 @@ func Load(ua string) (Settings, error) {
 	}
 
 	if err := json.Unmarshal(data, &s); err != nil {
-		return def, fmt.Errorf("%s: %w", path, err)
+		return defaults(), fmt.Errorf("%s: %w", path, err)
 	}
 
 	if s.Host == "" || s.Port < 1 || s.Port > 65535 {
-		return def, fmt.Errorf("%s: need a host and a port between 1 and 65535", path)
+		return defaults(), fmt.Errorf("%s: need a host and a port between 1 and 65535", path)
 	}
 
 	if s.Timeout < 0 {
-		return def, fmt.Errorf("%s: timeout is a number of seconds, 0 or more (0 means no limit)", path)
+		return defaults(), fmt.Errorf("%s: timeout is a number of seconds, 0 or more (0 means no limit)", path)
 	}
 
 	return s, nil
