@@ -27,7 +27,7 @@ type Result struct {
 	Elapsed    time.Duration
 }
 
-func CURL(r Request) (*Result, error) {
+func (r *Request) CURL() (*Result, error) {
 
 	start := time.Now() // -- STARTS
 	// +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++

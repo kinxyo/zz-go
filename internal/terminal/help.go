@@ -1,6 +1,6 @@
-package main
+package terminal
 
-import "github.com/kinxyo/zz-go/internal/terminal"
+import "github.com/kinxyo/zz-go/internal/config"
 
 type helpRow struct {
 	left  string // command, flag or example, shown in cyan
@@ -53,7 +53,7 @@ var helpSections = []helpSection{
 	},
 	{
 		title: "FLAGS",
-		hint:  "go before the url",
+		hint:  "anywhere: before or after the arguments",
 		width: 18,
 		rows: []helpRow{
 			{`-H "Key: Value"`, "add a header (repeatable)"},
@@ -62,6 +62,7 @@ var helpSections = []helpSection{
 			{"-p", "pretty-print a JSON body"},
 			{"-f", "exit 22 on a 4xx or 5xx (the body is still printed)"},
 			{"-d", "use http:// for urls typed without a scheme"},
+			{"-r", "send the body exactly as typed: no fix-ups, no Content-Type detected"},
 			{"-m <seconds>", "time limit, 0 for none (default: the config's, 30)"},
 		},
 	},
@@ -91,27 +92,27 @@ var helpSections = []helpSection{
 }
 
 // printHelp prints the usage text. It doesn't clear the screen, so it reads like any other command.
-func printHelp() {
-	terminal.PrintFC(terminal.TextBold, "zigzag")
-	terminal.PrintF(" (zz) %s  quick HTTP requests from the terminal\n", version)
+func PrintHelp() {
+	PrintFC(TextBold, "zigzag")
+	PrintF(" (zz) %s  quick HTTP requests from the terminal\n", config.Version)
 
 	for _, s := range helpSections {
-		terminal.PrintF("\n")
-		terminal.PrintFC(terminal.TextBold, "%s", s.title)
+		PrintF("\n")
+		PrintFC(TextBold, "%s", s.title)
 		if s.hint != "" {
-			terminal.PrintFC(terminal.TextDim, "  %s", s.hint)
+			PrintFC(TextDim, "  %s", s.hint)
 		}
-		terminal.PrintF("\n")
+		PrintF("\n")
 
 		for _, r := range s.rows {
-			terminal.PrintF("  ")
+			PrintF("  ")
 			if r.right == "" {
-				terminal.PrintFC(terminal.TextCyan, "%s", r.left)
+				PrintFC(TextCyan, "%s", r.left)
 			} else {
-				terminal.PrintFC(terminal.TextCyan, "%-*s", s.width, r.left)
-				terminal.PrintF("  %s", r.right)
+				PrintFC(TextCyan, "%-*s", s.width, r.left)
+				PrintF("  %s", r.right)
 			}
-			terminal.PrintF("\n")
+			PrintF("\n")
 		}
 	}
 }

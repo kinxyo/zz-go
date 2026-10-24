@@ -30,7 +30,7 @@ func main() {
 	t := terminal.GetArgs()
 
 	if *t.Flags.Help {
-		printHelp()
+		terminal.PrintHelp()
 		return
 	}
 
@@ -45,19 +45,20 @@ func main() {
 	}
 
 	if t.Args[0] == "version" || t.Args[0] == "v" {
-		printVersion()
+		terminal.PrintVersion()
 		return
 	}
 
 	if t.Args[0] == "help" {
-		printHelp()
+		terminal.PrintHelp()
 		return
 	}
 
-	settings, err := config.Load()
+	ua := "zz/" + config.Version
+	conf, err := config.Load(ua)
 	if err != nil {
 		terminal.Err("config: %s (using defaults)\n", err)
 	}
 
-	cli.Run(t.Args, &t.Flags, cli.Env{Settings: settings, UserAgent: "zz/" + version})
+	cli.Run(t.Args, &t.Flags, conf)
 }

@@ -43,7 +43,7 @@ func TestCURLSendsRequest(t *testing.T) {
 	headers.Set("Authorization", "Bearer tok")
 	headers.Set("Content-Type", "application/json")
 
-	res, err := CURL(Request{Method: "POST", URL: srv.URL + "/items", Header: headers, Body: `{"a":1}`})
+	res, err := (&Request{Method: "POST", URL: srv.URL + "/items", Header: headers, Body: `{"a":1}`}).CURL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,7 +85,7 @@ func TestCURLSendsRequest(t *testing.T) {
 func TestCURLWithoutHeadersOrBody(t *testing.T) {
 	srv, got := newServer(t, http.StatusOK, "hi")
 
-	res, err := CURL(Request{Method: "GET", URL: srv.URL})
+	res, err := (&Request{Method: "GET", URL: srv.URL}).CURL()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestCURLEmptyUserAgentSendsNone(t *testing.T) {
 	srv, got := newServer(t, http.StatusOK, "")
 
 	headers := http.Header{"User-Agent": {""}}
-	if _, err := CURL(Request{Method: "GET", URL: srv.URL, Header: headers}); err != nil {
+	if _, err := (&Request{Method: "GET", URL: srv.URL, Header: headers}).CURL(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -118,7 +118,7 @@ func TestCURLEmptyUserAgentSendsNone(t *testing.T) {
 func TestCURLErrorStatusIsNotAnError(t *testing.T) {
 	srv, _ := newServer(t, http.StatusNotFound, "nope")
 
-	res, err := CURL(Request{Method: "GET", URL: srv.URL})
+	res, err := (&Request{Method: "GET", URL: srv.URL}).CURL()
 	if err != nil {
 		t.Fatalf("a 404 is a response, not an error: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestCURLSetsEachHeaderValue(t *testing.T) {
 	srv, got := newServer(t, http.StatusOK, "")
 
 	headers := http.Header{"Accept": {"text/plain", "application/json"}}
-	if _, err := CURL(Request{Method: "GET", URL: srv.URL, Header: headers}); err != nil {
+	if _, err := (&Request{Method: "GET", URL: srv.URL, Header: headers}).CURL(); err != nil {
 		t.Fatal(err)
 	}
 
@@ -145,7 +145,7 @@ func TestCURLConnectionRefusedIsFriendly(t *testing.T) {
 	url := srv.URL
 	srv.Close() // nothing listens there any more
 
-	_, err := CURL(Request{Method: "GET", URL: url})
+	_, err := (&Request{Method: "GET", URL: url}).CURL()
 	if err == nil {
 		t.Fatal("want an error")
 	}
@@ -158,7 +158,7 @@ func TestCURLConnectionRefusedIsFriendly(t *testing.T) {
 }
 
 func TestCURLBadURL(t *testing.T) {
-	_, err := CURL(Request{Method: "GET", URL: "http://[::1"})
+	_, err := (&Request{Method: "GET", URL: "http://[::1"}).CURL()
 	if err == nil {
 		t.Fatal("want an error for a malformed URL")
 	}
@@ -168,7 +168,7 @@ func TestCURLBadURL(t *testing.T) {
 }
 
 func TestCURLBadMethod(t *testing.T) {
-	if _, err := CURL(Request{Method: "BAD METHOD", URL: "http://127.0.0.1:1/"}); err == nil {
+	if _, err := (&Request{Method: "BAD METHOD", URL: "http://127.0.0.1:1/"}).CURL(); err == nil {
 		t.Error("want an error for an invalid method")
 	}
 }
@@ -180,7 +180,7 @@ func TestCURLTimesOutWaitingForHeaders(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := CURL(Request{Method: "GET", URL: srv.URL, Timeout: 50 * time.Millisecond})
+	_, err := (&Request{Method: "GET", URL: srv.URL, Timeout: 50 * time.Millisecond}).CURL()
 	if err == nil {
 		t.Fatal("want a timeout error")
 	}
@@ -202,7 +202,7 @@ func TestCURLTimesOutReadingTheBody(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	_, err := CURL(Request{Method: "GET", URL: srv.URL, Timeout: 50 * time.Millisecond})
+	_, err := (&Request{Method: "GET", URL: srv.URL, Timeout: 50 * time.Millisecond}).CURL()
 	if err == nil {
 		t.Fatal("want a timeout error")
 	}
@@ -222,7 +222,7 @@ func TestCURLNoTimeout(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	res, err := CURL(Request{Method: "GET", URL: srv.URL, Timeout: 0})
+	res, err := (&Request{Method: "GET", URL: srv.URL, Timeout: 0}).CURL()
 	if err != nil {
 		t.Fatal(err)
 	}

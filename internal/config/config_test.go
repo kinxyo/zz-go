@@ -24,6 +24,16 @@ func isolate(t *testing.T) string {
 	return path
 }
 
+// testUA is the User-Agent the tests pass to Load, the way main passes zz/<version>.
+const testUA = "zz/test"
+
+// want is the defaults as Load returns them: with the User-Agent it was given.
+func want() Settings {
+	s := defaults()
+	s.UserAgent = testUA
+	return s
+}
+
 func writeConfig(t *testing.T, path, content string) {
 	t.Helper()
 
@@ -38,12 +48,12 @@ func writeConfig(t *testing.T, path, content string) {
 func TestLoadFirstRunCreatesTheFile(t *testing.T) {
 	path := isolate(t)
 
-	got, err := Load()
+	got, err := Load(testUA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != defaults() {
-		t.Errorf("got %+v; want the defaults %+v", got, defaults())
+	if got != want() {
+		t.Errorf("got %+v; want the defaults %+v", got, want())
 	}
 
 	data, err := os.ReadFile(path)
@@ -52,8 +62,8 @@ func TestLoadFirstRunCreatesTheFile(t *testing.T) {
 	}
 
 	// what was written must load back to the same settings
-	again, err := Load()
-	if err != nil || again != defaults() {
+	again, err := Load(testUA)
+	if err != nil || again != want() {
 		t.Errorf("second Load = %+v, %v; file was:\n%s", again, err, data)
 	}
 }
@@ -62,11 +72,11 @@ func TestLoadReadsTheFile(t *testing.T) {
 	path := isolate(t)
 	writeConfig(t, path, `{"host": "example.test", "port": 3000, "timeout": 5}`)
 
-	got, err := Load()
+	got, err := Load(testUA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (Settings{Host: "example.test", Port: 3000, Timeout: 5}); got != want {
+	if want := (Settings{Host: "example.test", Port: 3000, Timeout: 5, UserAgent: testUA}); got != want {
 		t.Errorf("got %+v; want %+v", got, want)
 	}
 }
@@ -75,20 +85,20 @@ func TestLoadMissingKeysKeepTheirDefaults(t *testing.T) {
 	path := isolate(t)
 
 	writeConfig(t, path, `{"port": 3000}`)
-	got, err := Load()
+	got, err := Load(testUA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (Settings{Host: defaults().Host, Port: 3000, Timeout: defaults().Timeout}); got != want {
+	if want := (Settings{Host: defaults().Host, Port: 3000, Timeout: defaults().Timeout, UserAgent: testUA}); got != want {
 		t.Errorf("only port set: got %+v; want %+v", got, want)
 	}
 
 	writeConfig(t, path, `{"host": "example.test"}`)
-	got, err = Load()
+	got, err = Load(testUA)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := (Settings{Host: "example.test", Port: defaults().Port, Timeout: defaults().Timeout}); got != want {
+	if want := (Settings{Host: "example.test", Port: defaults().Port, Timeout: defaults().Timeout, UserAgent: testUA}); got != want {
 		t.Errorf("only host set: got %+v; want %+v", got, want)
 	}
 }
@@ -98,7 +108,7 @@ func TestLoadDoesNotOverwriteAnExistingFile(t *testing.T) {
 	const content = `{"port": 3000}`
 	writeConfig(t, path, content)
 
-	if _, err := Load(); err != nil {
+	if _, err := Load(testUA); err != nil {
 		t.Fatal(err)
 	}
 
@@ -130,12 +140,12 @@ func TestLoadRejectsBadFiles(t *testing.T) {
 			path := isolate(t)
 			writeConfig(t, path, c.content)
 
-			got, err := Load()
+			got, err := Load(testUA)
 			if err == nil {
 				t.Fatalf("want an error, got none (settings %+v)", got)
 			}
-			if got != defaults() {
-				t.Errorf("settings = %+v; want the defaults alongside the error", got)
+			if got != want() {
+				t.Errorf("settings = %+v; want the defaults, with the User-Agent, alongside the error", got)
 			}
 			if !strings.Contains(err.Error(), "setting.json") {
 				t.Errorf("error %q should name the file", err)
@@ -170,7 +180,7 @@ func TestTimeoutDefaultAndZero(t *testing.T) {
 	path := isolate(t)
 	writeConfig(t, path, `{"timeout": 0}`)
 
-	got, err := Load()
+	got, err := Load(testUA)
 	if err != nil {
 		t.Fatalf("0 means no limit and should load: %v", err)
 	}
@@ -182,11 +192,39 @@ func TestTimeoutDefaultAndZero(t *testing.T) {
 func TestFirstRunFileHasTheTimeout(t *testing.T) {
 	path := isolate(t)
 
-	if _, err := Load(); err != nil {
+	if _, err := Load(testUA); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(path)
 	if !strings.Contains(string(data), `"timeout": 30`) {
 		t.Errorf("new file should show the timeout:\n%s", data)
 	}
+}
+
+func TestLoadUserAgent(t *testing.T) {
+	t.Run("the file's userAgent wins", func(t *testing.T) {
+		path := isolate(t)
+		writeConfig(t, path, `{"userAgent": "mine/1"}`)
+
+		got, err := Load(testUA)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.UserAgent != "mine/1" {
+			t.Errorf("UserAgent = %q; want mine/1", got.UserAgent)
+		}
+	})
+
+	t.Run("without one in the file, the given one is used", func(t *testing.T) {
+		path := isolate(t)
+		writeConfig(t, path, `{"port": 3000}`)
+
+		got, err := Load(testUA)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.UserAgent != testUA {
+			t.Errorf("UserAgent = %q; want %q", got.UserAgent, testUA)
+		}
+	})
 }

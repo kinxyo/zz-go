@@ -1,4 +1,4 @@
-package main
+package terminal_test
 
 import (
 	"regexp"
@@ -7,19 +7,12 @@ import (
 	"testing"
 
 	"github.com/kinxyo/zz-go/internal/cli"
+	"github.com/kinxyo/zz-go/internal/terminal"
 )
 
 // TestHelpListsEveryExitCode keeps the help's EXIT summary in step with cli.ExitCodes.
 func TestHelpListsEveryExitCode(t *testing.T) {
-	var exit string
-	for _, s := range helpSections {
-		if s.title != "EXIT" {
-			continue
-		}
-		for _, r := range s.rows {
-			exit += r.left + " " + r.right + "\n"
-		}
-	}
+	exit := terminal.HelpText("EXIT")
 	if exit == "" {
 		t.Fatal("help has no EXIT section")
 	}

@@ -3,6 +3,8 @@ package terminal
 import (
 	"fmt"
 	"os"
+
+	"github.com/kinxyo/zz-go/internal/config"
 )
 
 // TODO: maybe check error `fprintf`?
@@ -20,4 +22,9 @@ func PrintFC(color TextFmt, format string, a ...any) {
 // Print -- NewLine
 func Print(a ...any) {
 	_, _ = fmt.Fprintln(os.Stdout, a...)
+}
+
+// printVersion prints the program name and version.
+func PrintVersion() {
+	Print("zz -- v" + config.Version)
 }

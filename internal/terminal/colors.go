@@ -42,11 +42,6 @@ func StdoutIsTerminal() bool {
 	return isTerminal(os.Stdout)
 }
 
-// StdinIsTerminal reports whether stdin is a terminal, so nothing is being piped in.
-func StdinIsTerminal() bool {
-	return isTerminal(os.Stdin)
-}
-
 func colorFmt(std io.Writer, color TextFmt, format string, a ...any) {
 	if !useColor(std) {
 		fmt.Fprintf(std, format, a...)

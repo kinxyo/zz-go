@@ -3,6 +3,7 @@ package terminal
 import (
 	"flag"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 )
@@ -15,13 +16,19 @@ type Flags struct {
 	PrintHeaders   *bool
 	Pretty         *bool
 	Fail           *bool
-	ForceHttp      *bool
+	ForceHttp      *bool // I don't remember for which usecase I added this flag.
+	Raw            *bool
 	Help           *bool
 	Timeout        *int // -m, in seconds; -1 when it wasn't given
 	RequestHeaders *[]string
 }
 
 func newFlag() Flags {
+	// On a bad flag, the flag package prints the error, then this instead of its list of every flag.
+	flag.Usage = func() {
+		LogFC(TextDim, "zz -h shows the flags\n")
+	}
+
 	var headers []string
 	flag.Func("H", `header "Key: Value" (repeatable)`, func(s string) error {
 		if !strings.Contains(s, ":") {
@@ -54,6 +61,7 @@ func newFlag() Flags {
 		Pretty:         flag.Bool("p", false, "pretty-print a JSON body"),
 		Fail:           flag.Bool("f", false, "exit with status 22 on a 4xx or 5xx response (the body is still printed)"),
 		ForceHttp:      flag.Bool("d", false, "use http:// for urls typed without a scheme"),
+		Raw:            flag.Bool("r", false, "send the body exactly as typed: no fix-ups, no Content-Type detected"),
 		Help:           &help,
 		Timeout:        &timeout,
 		RequestHeaders: &headers,
@@ -79,10 +87,28 @@ type Args struct {
 func GetArgs() Args {
 	f := newFlag()
 
-	flag.Parse()
-
 	return Args{
 		Flags: f,
-		Args:  flag.Args(),
+		Args:  parseAnywhere(os.Args[1:]),
+	}
+}
+
+// parseAnywhere parses the flags wherever they are, so `zz /users -v` works like
+// `zz -v /users`, and returns the arguments that aren't flags, in order. flag.Parse stops
+// at the first argument that isn't a flag, so it is run again on what follows each one.
+// A flag's value (-H "Key: Value", -m 5) is taken by the flag package, never mistaken for
+// an argument.
+func parseAnywhere(args []string) []string {
+	var positional []string
+
+	for {
+		_ = flag.CommandLine.Parse(args) // a bad flag exits with the usage (flag.ExitOnError)
+		args = flag.Args()
+		if len(args) == 0 {
+			return positional
+		}
+
+		positional = append(positional, args[0])
+		args = args[1:]
 	}
 }

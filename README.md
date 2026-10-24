@@ -23,6 +23,16 @@ zz -p post /users '{"name":"Alice"}'
 - **Metadata stays out of the way.** The URL, time, status and response headers go to stderr and
   the body to stdout, so `zz /users | jq` and `zz /file > out.json` stay clean. `-p` pretty-prints
   a JSON body when you want to read it.
+- **JSON without the quotes.** Type the body the way you'd write it by hand; zz quotes the keys
+  and the bare words for you. Valid JSON is never changed, and `-r` sends the body as typed.
+
+  | Typed | Sent |
+  |-------|------|
+  | `{msg: hello world, n: 3, ok: true, x: null}` | `{"msg": "hello world", "n": 3, "ok": true, "x": null}` |
+  | `{url: http://x.io/a?b=1, tags: [a, b, 2]}` | `{"url": "http://x.io/a?b=1", "tags": ["a", "b", 2]}` |
+  | `{user: {name: alice, age: 30}}` | `{"user": {"name": "alice", "age": 30}}` |
+  | `{say: he said "hi"}` | `{"say": "he said \"hi\""}` |
+  | `{a: -1.5e3, b: 01}` | `{"a": -1.5e3, "b": "01"}`: `01` isn't a valid JSON number, so it stays a string, which keeps ZIP codes intact |
 - **Plain errors.** Connection refused, unknown host and a wrong `https://` say what happened in
   one line instead of a Go error chain.
 - **One binary.** No runtime, no config needed to start.
@@ -61,7 +71,7 @@ make prod
 zz [flags] [method] <url> ['<json body>']
 ```
 
-**Flags go before the URL.** `zz -v /users` works; `zz /users -v` is rejected.
+**Flags go anywhere.** `zz -v /users` and `zz /users -v` are the same request.
 
 ### URLs
 
@@ -137,6 +147,7 @@ An empty body (an empty file, empty stdin, or `""`) is an error. A body that is 
 | `-p` | Pretty-print a JSON body. Without it the body is printed exactly as received. |
 | `-f` | Exit with status 22 if the response is a 4xx or 5xx. Unlike `curl --fail`, the body is still printed, so you can read the error. |
 | `-d` | Use `http://` for a URL typed without a scheme. |
+| `-r` | Send the body exactly as typed: no JSON fix-ups, no Content-Type detected. |
 | `-m <seconds>` | Time limit for the whole request, in whole seconds; `0` means no limit. Overrides `timeout` in the [config](#config). |
 
 Requests send `User-Agent: zz/<version>` unless you set your own with `-H`. An empty value
@@ -261,10 +272,18 @@ make run     # build and install to ~/bin
 make deps    # which package imports which
 ```
 
+The tests have two layers. Unit tests sit next to the code they test. The end-to-end tests in
+`cmd/zz/e2e_test.go` build the real `zz` once and run it against a local test server, each test
+with its own config directory, checking stdout, stderr, the exit code and what the server
+received. `go test -short ./...` skips them. A unit test in `internal/terminal` checks that every
+flag the program has is listed in the help and in the flag table above, and the other way round. Anything that needs a real
+terminal (colors, refusing binary output) is covered only by unit tests of the helpers that decide
+it.
+
 A release build stamps its version into the binary. To do the same by hand:
 
 ```sh
-go build -ldflags "-X main.version=1.2.3" -o zz ./cmd/zz
+go build -ldflags "-X github.com/kinxyo/zz-go/internal/config.Version=1.2.3" -o zz ./cmd/zz
 ```
 
 Every push to `main` runs the tests, builds the binaries above and publishes them as a release
