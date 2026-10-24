@@ -79,7 +79,8 @@ zz [flags] [method] <url> [body]
 |--------------------------|-------------------------------------------|
 | `/users`                 | `http://127.0.0.1:8000/users` (see [Config](#config)) |
 | `httpbin.org/json`       | `https://httpbin.org/json`                |
-| `-d localhost:3000/x`    | `http://localhost:3000/x`                 |
+| `localhost:3000/x`       | `http://localhost:3000/x` (`localhost`, `127.x.x.x` and `::1` are plain http) |
+| `-d 192.168.1.5:8000/x`  | `http://192.168.1.5:8000/x`               |
 | `https://api.example.com/x` | used as typed                          |
 
 A query string is part of the URL: `zz '/search?q=go&page=2'`. Quote it, or the shell treats `&` as
@@ -135,7 +136,7 @@ zz -r post /raw '{not: json}'
 | `-i` | Show the response headers. |
 | `-p` | Pretty-print a JSON body. Without it the body is printed exactly as received. |
 | `-f` | Exit with status 22 if the response is a 4xx or 5xx. Unlike `curl --fail`, the body is still printed, so you can read the error. |
-| `-d` | Use `http://` for a URL typed without a scheme. |
+| `-d` | Use `http://` for a URL typed without a scheme. Local hosts already get it. |
 | `-r` | Send the body exactly as typed: no JSON fix-ups, no Content-Type detected. |
 | `-m <seconds>` | Time limit for the whole request, in whole seconds; `0` means no limit. Overrides `timeout` in the [config](#config). |
 
@@ -180,7 +181,8 @@ A local server over plain http:
 
 ```sh
 zz /api                         # http://127.0.0.1:8000/api
-zz -d localhost:3000/health     # http://localhost:3000/health
+zz localhost:3000/health        # http://localhost:3000/health
+zz -d 192.168.1.5:8000/health   # http on another machine
 ```
 
 Read a JSON response, or save it exactly as received:

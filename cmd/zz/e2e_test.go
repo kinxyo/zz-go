@@ -387,9 +387,9 @@ func TestE2ERequest(t *testing.T) {
 		}
 	})
 
-	t.Run("-d reaches a host typed without a scheme over http", func(t *testing.T) {
-		u, _ := url.Parse(e.srv.URL)
-		if got := e.echo(t, "", "-d", u.Host+"/echo"); got.Method != "GET" {
+	t.Run("a local host typed without a scheme is reached over http", func(t *testing.T) {
+		u, _ := url.Parse(e.srv.URL) // 127.0.0.1:<port>
+		if got := e.echo(t, "", "p", u.Host+"/echo", `{content: hi}`); got.Method != "POST" || got.Body != `{"content": "hi"}` {
 			t.Errorf("server saw %+v", got)
 		}
 	})

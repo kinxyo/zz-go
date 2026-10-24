@@ -3,6 +3,7 @@ package network
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"strings"
 )
@@ -39,6 +40,7 @@ func (r *Request) MakeURL(base string, forceHTTP bool) {
 	// 1. zz /api/users (local, from the config)
 	// 2. zz httpbin.org/json (https)
 	// 3. zz -d httpbin.org/json (http)
+	// 4. zz localhost:3000/x (http: a server on this machine is plain http)
 	// A URL that already has a scheme is left alone, even with -d.
 
 	switch {
@@ -46,11 +48,30 @@ func (r *Request) MakeURL(base string, forceHTTP bool) {
 		r.URL = base + r.URL
 	case strings.HasPrefix(r.URL, "http://") || strings.HasPrefix(r.URL, "https://"):
 		// used as typed
-	case forceHTTP:
+	case forceHTTP, isLoopback(r.URL):
 		r.URL = "http://" + r.URL
 	default:
 		r.URL = "https://" + r.URL
 	}
+}
+
+// isLoopback reports whether a URL typed without a scheme points at this machine:
+// localhost, 127.x.x.x or ::1, with or without a port.
+func isLoopback(url string) bool {
+	host := url
+	if i := strings.IndexAny(host, "/?#"); i >= 0 {
+		host = host[:i]
+	}
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	host = strings.Trim(host, "[]") // [::1] without a port
+
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // ParseBody returns the Content-Type of r.Body, or "" when it can't tell. r.Body only

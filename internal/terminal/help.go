@@ -72,6 +72,7 @@ var helpSections = []helpSection{
 		rows: []helpRow{
 			{"/users", "http://127.0.0.1:8000/users (host and port from the config)"},
 			{"example.com/x", "https://example.com/x"},
+			{"localhost:3000/x", "http://localhost:3000/x (so is 127.x.x.x and ::1)"},
 			{"https://...", "used as typed"},
 		},
 	},
