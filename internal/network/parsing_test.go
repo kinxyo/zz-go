@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kinxyo/zz-go/internal/config"
 )
 
 func TestMatchMethod(t *testing.T) {
@@ -119,8 +121,9 @@ func TestParseBody(t *testing.T) {
 		{"unquoted key and value", `{content: hi}`, `{"content": "hi"}`, "application/json", false},
 		{"ndjson", "{\"a\":1}\n{\"a\":2}\n", "{\"a\":1}\n{\"a\":2}\n", "application/x-ndjson", false},
 		{"xml", "<user><name>a</name></user>", "<user><name>a</name></user>", "application/xml", false},
-		{"plain text", "hello", "hello", "", false},
-		{"form-like text is not detected", "x=1&y=2", "x=1&y=2", "", false},
+		{"plain text", "hello", "hello", "text/plain; charset=utf-8", false},
+		{"form-like text is plain text", "x=1&y=2", "x=1&y=2", "text/plain; charset=utf-8", false},
+		{"text that is not utf-8 is binary", "\x89PNG\r\n\x1a\n\xff", "\x89PNG\r\n\x1a\n\xff", "application/octet-stream", false},
 		{"looks like json but can't be fixed", `{content: }`, `{content: }`, "", true},
 		{"broken ndjson", "{\"a\":1}\n{bad", "{\"a\":1}\n{bad", "", true},
 	}
@@ -242,7 +245,7 @@ func TestBuildHeaders(t *testing.T) {
 		}
 	})
 
-	t.Run("no detected Content-Type sets none", func(t *testing.T) {
+	t.Run("no Content-Type (no body, or -r) sets none", func(t *testing.T) {
 		if _, ok := headers(t, "", "")["Content-Type"]; ok {
 			t.Error("Content-Type is set")
 		}
@@ -275,9 +278,9 @@ func TestBuildHeaders(t *testing.T) {
 		}
 	})
 
-	t.Run("no default User-Agent sets none", func(t *testing.T) {
-		if _, ok := headers(t, "", "")["User-Agent"]; ok {
-			t.Error("User-Agent is set")
+	t.Run("an empty User-Agent sends zz/<version>", func(t *testing.T) {
+		if got, want := headers(t, "", "").Get("User-Agent"), "zz/"+config.Version; got != want {
+			t.Errorf("User-Agent = %q; want %q", got, want)
 		}
 	})
 

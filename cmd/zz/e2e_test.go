@@ -65,6 +65,7 @@ func TestMain(m *testing.M) {
 type echoed struct {
 	Method      string  `json:"method"`
 	ContentType string  `json:"content_type"`
+	HasCT       bool    `json:"has_content_type"` // false when no Content-Type was sent, not even an empty one
 	Auth        string  `json:"auth"`
 	UserAgent   *string `json:"user_agent"` // nil when no User-Agent was sent
 	Body        string  `json:"body"`
@@ -103,6 +104,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 			Auth:        r.Header.Get("Authorization"),
 			Body:        string(body),
 		}
+		_, e.HasCT = r.Header["Content-Type"]
 		if ua, ok := r.Header["User-Agent"]; ok {
 			s := strings.Join(ua, ",")
 			e.UserAgent = &s
@@ -398,21 +400,27 @@ func TestE2ERequest(t *testing.T) {
 		os.WriteFile(path, []byte("{name: Alice}\n"), 0o644)
 
 		got := e.echo(t, "", "-r", "post", "/echo", "@"+path)
-		if got.Body != "{name: Alice}\n" || got.ContentType != "" {
+		if got.Body != "{name: Alice}\n" || got.HasCT {
 			t.Errorf("server saw %+v", got)
 		}
 	})
 
-	t.Run("plain text is sent as is, with no Content-Type", func(t *testing.T) {
+	t.Run("plain text is sent as is, as text/plain", func(t *testing.T) {
 		got := e.echo(t, "", "post", "/echo", "hello")
-		if got.ContentType != "" || got.Body != "hello" {
+		if got.ContentType != "text/plain; charset=utf-8" || got.Body != "hello" {
 			t.Errorf("server saw %+v", got)
+		}
+	})
+
+	t.Run("a request without a body sends no Content-Type", func(t *testing.T) {
+		if got := e.echo(t, "", "/echo"); got.HasCT {
+			t.Errorf("Content-Type = %q; want none", got.ContentType)
 		}
 	})
 
 	t.Run("-r sends the body as typed, with no Content-Type", func(t *testing.T) {
 		got := e.echo(t, "", "-r", "post", "/echo", `{name: Alice}`)
-		if got.ContentType != "" || got.Body != `{name: Alice}` {
+		if got.HasCT || got.Body != `{name: Alice}` {
 			t.Errorf("server saw %+v", got)
 		}
 	})

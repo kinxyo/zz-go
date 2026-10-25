@@ -54,8 +54,7 @@ func main() {
 		return
 	}
 
-	ua := "zz/" + config.Version
-	conf, err := config.Load(ua)
+	conf, err := config.Load()
 	if err != nil {
 		terminal.Err("config: %s (using defaults)\n", err)
 	}

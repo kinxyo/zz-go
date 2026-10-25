@@ -15,7 +15,7 @@ type Settings struct {
 	Host      string `json:"host"`
 	Port      int    `json:"port"`
 	Timeout   int    `json:"timeout"`   // seconds for a whole request; 0 means no limit
-	UserAgent string `json:"userAgent"` // "" means zz/<version>, filled in by Load
+	UserAgent string `json:"userAgent"` // "" means zz/<version>, filled in by network.BuildHeaders
 }
 
 func defaults() Settings {
@@ -27,20 +27,9 @@ func defaults() Settings {
 	}
 }
 
-// Load returns the settings from the config file, with ua as the User-Agent when the file
-// doesn't set one. ua is filled in only here, never written to the file, so an upgrade's
-// zz/<version> takes effect even in a file written by an older zz.
-func Load(ua string) (Settings, error) {
-	s, err := load()
-	if s.UserAgent == "" {
-		s.UserAgent = ua
-	}
-	return s, err
-}
-
-// load reads the config file. If the file doesn't exist yet, it is created with the
+// Load reads the config file. If the file doesn't exist yet, it is created with the
 // defaults. Keys missing from the file keep their defaults.
-func load() (Settings, error) {
+func Load() (Settings, error) {
 	s := defaults()
 
 	path, err := getPath()

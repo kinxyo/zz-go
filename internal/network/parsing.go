@@ -8,6 +8,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/kinxyo/zz-go/internal/config"
 )
 
 // MatchMethod returns the HTTP method for m (or an alias of it), and false if m isn't one.
@@ -113,18 +116,19 @@ func expandHome(path string) string {
 	return filepath.Join(home, path[1:])
 }
 
-// ParseBody returns the Content-Type of r.Body, or "" when it can't tell. r.Body only
+// ParseBody returns the Content-Type of r.Body, or "" when there is no body. r.Body only
 // changes when loose JSON is fixed up.
-// Only the types that can be told apart reliably are detected:
 //   - JSON: the whole body parses as one JSON value. JSON typed loosely by hand, like
 //     {content: hi}, is fixed up first (see relaxJSON); valid JSON is never changed.
 //   - NDJSON: more than one line, and every line is a JSON value on its own.
 //   - XML: the body starts with '<'. HTML starts with '<' too, but nobody sends
 //     HTML to an API, so '<' is taken to mean XML. It isn't validated.
+//   - anything else: text/plain when it's text (valid UTF-8), application/octet-stream when
+//     it isn't (an image sent with @file).
 //
 // A body that starts like JSON ({ or [) but is neither is an error that says what's wrong.
 //
-// Not detected (yet):
+// Not detected (yet), so they get text/plain:
 //   - form-urlencoded (a=1&b=2): only a guess, it clashes with plain text like "x=1".
 //   - multipart: not typed by the user; the tool builds it from files, with its own boundary.
 //   - file types for @file: by extension (mime.TypeByExtension), then by sniffing the
@@ -159,7 +163,10 @@ func (r *Request) ParseBody() (string, error) {
 		return "", fmt.Errorf("body is not valid JSON: %w", err)
 	}
 
-	return "", nil
+	if !utf8.ValidString(r.Body) {
+		return "application/octet-stream", nil
+	}
+	return "text/plain; charset=utf-8", nil
 }
 
 // relaxJSON quotes the bare words in JSON typed by hand: {content: hi} becomes
@@ -253,8 +260,9 @@ func isNDJSON(body string) bool {
 	return lines > 1
 }
 
-// BuildHeaders layers the headers, lowest priority first: zz's defaults (the User-Agent and the
-// Content-Type ParseBody detected), then the -H flags. Set replaces an earlier header with the
+// BuildHeaders layers the headers, lowest priority first: zz's defaults (the User-Agent, or
+// zz/<version> when it's empty, and the Content-Type ParseBody detected, left out when it's
+// empty: no body, or -r), then the -H flags. Set replaces an earlier header with the
 // same name, and names are matched without case, so -H "content-type: text/plain" wins over the
 // detected one. An empty -H value, like -H "User-Agent:", sends that header with no value, which
 // for the User-Agent means none is sent.
@@ -263,11 +271,12 @@ func (r *Request) BuildHeaders(contentType string, raw []string, userAgent strin
 	h := http.Header{}
 
 	// 1. Setting defaults
-	if userAgent != "" {
-		h.Set("User-Agent", userAgent)
+	if userAgent == "" {
+		userAgent = "zz/" + config.Version // config gets coupled with this but that's the intended behaviour.
 	}
+	h.Set("User-Agent", userAgent)
 
-	if contentType != "" {
+	if contentType != "" { // "" means no body, or -r: nothing true to say about the type
 		h.Set("Content-Type", contentType)
 	}
 

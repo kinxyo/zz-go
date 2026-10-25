@@ -110,7 +110,9 @@ zz looks at the body to set the `Content-Type`:
 | `'{a: 1}'` | `application/json`, after quoting it into `{"a": 1}` (see [Why](#why)) |
 | one JSON value per line | `application/x-ndjson` |
 | starts with `<` | `application/xml` (not checked) |
-| anything else, like `'hello'` or `'a=1&b=2'` | none |
+| any other text, like `'hello'` or `'a=1&b=2'` | `text/plain; charset=utf-8` |
+| a file that isn't text (`@logo.png`) | `application/octet-stream` |
+| no body | none |
 
 Valid JSON is sent byte for byte, spacing included; only loose JSON is rewritten. A body that
 starts with `{` or `[` but can't be made into JSON is an error that says what's wrong, so a typo
