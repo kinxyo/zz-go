@@ -28,7 +28,7 @@ test:
 	go vet ./...
 	go test -race -count=1 ./...
 
-# delete the config; the next request writes a fresh one with the defaults
+# delete the config, project entries included; the next request writes a fresh one with the defaults
 reset:
 	rm -f "$(CONFIG)"
 

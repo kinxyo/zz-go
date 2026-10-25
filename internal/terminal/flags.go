@@ -53,7 +53,7 @@ func newFlag() Flags {
 	flag.BoolVar(&help, "help", false, "show help")
 
 	f := Flags{
-		Verbose:        flag.Bool("v", false, "show the url, time, status and response headers"),
+		Verbose:        flag.Bool("v", false, "show the config entry used, the url, time, status and response headers"),
 		PrintURL:       flag.Bool("u", false, "show the url"),
 		PrintTime:      flag.Bool("t", false, "show the time taken"),
 		PrintStatus:    flag.Bool("s", false, "show the status"),

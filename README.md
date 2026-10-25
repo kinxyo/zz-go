@@ -143,7 +143,7 @@ an error. Because of `@`, a typed body can't start with `@`.
 | Flag | |
 |------|-|
 | `-H "Key: Value"` | Add a request header. Repeat it for more. A later header with the same name replaces an earlier one. |
-| `-v` | Show the URL, time, status and response headers (the same as `-u -t -s -i`). |
+| `-v` | Show the URL, time, status and response headers (the same as `-u -t -s -i`), after a first line saying which [project entry](#projects) of the config is in use. |
 | `-u` | Show the URL. |
 | `-t` | Show the time the request took. |
 | `-s` | Show the status, colored by class (2xx green, 3xx cyan, 4xx yellow, 5xx red). |
@@ -217,7 +217,8 @@ The first request creates `~/.config/zz/setting.json` (on macOS
   "host": "127.0.0.1",
   "port": 8000,
   "timeout": 30,
-  "userAgent": ""
+  "userAgent": "",
+  "projects": {}
 }
 ```
 
@@ -225,8 +226,37 @@ The first request creates `~/.config/zz/setting.json` (on macOS
 in whole seconds, including reading the body; `0` means no limit, and `-m` overrides it for one
 request. `userAgent` replaces the `zz/<version>` User-Agent for every request; empty means
 `zz/<version>`. A key you leave out keeps its default. If the file can't be read, or a value is
-wrong (a port out of range, a negative or non-whole timeout), zz prints a warning and uses the
-defaults.
+wrong (a port out of range, a negative or non-whole timeout, a key zz doesn't know), zz prints a
+warning and uses the defaults.
+
+### Projects
+
+`projects` gives a directory its own settings, for requests made in it or in any directory
+below it:
+
+```json
+{
+  "port": 8000,
+  "projects": {
+    "~/work/shop-api": { "port": 3000 },
+    "/srv/legacy": { "host": "10.0.0.5", "timeout": 5 }
+  }
+}
+```
+
+From `~/work/shop-api/handlers`, `zz /users` goes to port 3000; anywhere else, to 8000.
+
+- An entry takes the same keys as the top level. A key it sets wins; a key it leaves out keeps
+  the top-level value. `"timeout": 0` in an entry turns the limit off.
+- A key is an absolute path; `~/` is your home directory. Symlinks are resolved on both sides.
+- The nearest entry wins: an entry for `~/work/shop-api/admin` beats `~/work/shop-api` inside
+  `admin`. A key only matches whole directory names, so `~/work/shop-api` doesn't cover
+  `~/work/shop-api-v2`.
+- A wrong entry (a bad value, a key zz doesn't know, a relative path) is skipped with a warning,
+  and the top-level settings are used.
+- Entries are tied to the path: rename or move a directory and its entry no longer matches.
+  `-v` starts with the entry in use (`config: project ~/work/shop-api`, or `config: no project
+  entry`).
 
 ## Output and errors
 
@@ -277,7 +307,7 @@ Where curl has a code for the same situation, zz uses the same number.
 ```sh
 make test    # go vet + go test -race
 make run     # build and install to ~/bin
-make reset   # delete setting.json; the next request writes the defaults
+make reset   # delete setting.json, project entries included; the next request writes the defaults
 make deps    # which package imports which
 ```
 

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/kinxyo/zz-go/internal/cli"
 	"github.com/kinxyo/zz-go/internal/collection"
 	"github.com/kinxyo/zz-go/internal/config"
@@ -54,10 +56,11 @@ func main() {
 		return
 	}
 
-	conf, err := config.Load()
-	if err != nil {
-		terminal.Err("config: %s (using defaults)\n", err)
+	wd, _ := os.Getwd() // "" if it can't be found: then no project entry is looked up
+	conf, project, warnings := config.Load(wd)
+	for _, w := range warnings {
+		terminal.Err("config: %s\n", w)
 	}
 
-	cli.Run(t.Args, &t.Flags, conf)
+	cli.Run(t.Args, &t.Flags, conf, project)
 }

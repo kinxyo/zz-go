@@ -58,7 +58,7 @@ var helpSections = []helpSection{
 		width: 18,
 		rows: []helpRow{
 			{`-H "Key: Value"`, "add a header (repeatable)"},
-			{"-v", "show url, time, status and response headers"},
+			{"-v", "show the config entry used, url, time, status and response headers"},
 			{"-u  -t  -s  -i", "pick what to show: url, time, status, headers"},
 			{"-p", "pretty-print a JSON body"},
 			{"-f", "exit 22 on a 4xx or 5xx (the body is still printed)"},
@@ -89,6 +89,7 @@ var helpSections = []helpSection{
 		title: "CONFIG",
 		rows: []helpRow{
 			{`~/.config/zz/setting.json  {"host": "127.0.0.1", "port": 8000, "timeout": 30}`, ""},
+			{`per directory and below: "projects": {"~/work/api": {"port": 3000}}`, ""},
 		},
 	},
 }

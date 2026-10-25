@@ -11,7 +11,9 @@ import (
 	"github.com/kinxyo/zz-go/internal/terminal"
 )
 
-func Run(args []string, flags *terminal.Flags, conf config.Settings) {
+// Run sends one request. project is the key of the config's project entry that conf came
+// from, "" when there is none; -v shows it.
+func Run(args []string, flags *terminal.Flags, conf config.Settings, project string) {
 
 	// Extracting method, url, body into a Request object.
 	r, err := extractIntoRequest(args, flags, conf)
@@ -48,7 +50,16 @@ func Run(args []string, flags *terminal.Flags, conf config.Settings) {
 	}
 	r.Timeout = time.Duration(seconds) * time.Second
 
-	// 6. Make network request
+	// 6. Make network request. -v first says which settings it was made with, so a request
+	// that fails still shows it (a renamed directory no longer matches its project entry).
+	if *flags.Verbose {
+		if project == "" {
+			terminal.LogFC(terminal.TextDim, "config: no project entry\n")
+		} else {
+			terminal.LogFC(terminal.TextDim, "config: project %s\n", project)
+		}
+	}
+
 	res, err := r.CURL()
 	if err != nil {
 		terminal.FatalWith(exitCode(err), "%s\n", err)

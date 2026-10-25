@@ -171,11 +171,12 @@ type result struct {
 	took           time.Duration
 }
 
-// run runs zz with the given stdin (none when empty) and arguments.
+// run runs zz in e.dir with the given stdin (none when empty) and arguments.
 func (e *env) run(t *testing.T, stdin string, args ...string) result {
 	t.Helper()
 
 	cmd := exec.Command(zzBin, args...)
+	cmd.Dir = e.dir // never the repo, so nothing around it can be taken for a project
 	cmd.Env = []string{
 		"HOME=" + e.dir, "USERPROFILE=" + e.dir, // home directory
 		"XDG_CONFIG_HOME=" + e.dir, "AppData=" + e.dir, // config directory
@@ -283,11 +284,11 @@ func TestE2EOutput(t *testing.T) {
 		}
 	})
 
-	t.Run("-v shows the url, time, status and headers", func(t *testing.T) {
+	t.Run("-v shows the config used, the url, time, status and headers", func(t *testing.T) {
 		r := e.run(t, "", "-v", "/json")
 		expect(t, r, 0, jsonBody)
-		if !strings.HasPrefix(r.stderr, "GET "+e.srv.URL+"/json\nTime: ") {
-			t.Errorf("stderr should start with the url and time:\n%s", r.stderr)
+		if !strings.HasPrefix(r.stderr, "config: no project entry\nGET "+e.srv.URL+"/json\nTime: ") {
+			t.Errorf("stderr should start with the config, the url and time:\n%s", r.stderr)
 		}
 		contains(t, "stderr", r.stderr, "HTTP/1.1 200 OK\n", "Content-Type: application/json\n")
 	})
@@ -544,6 +545,19 @@ func TestE2EConfig(t *testing.T) {
 	t.Run("host and port decide where /path goes", func(t *testing.T) {
 		e.config(t, "")
 		expect(t, e.run(t, "", "/json"), 0, jsonBody)
+	})
+
+	t.Run("a project entry for the directory wins over the global host and port", func(t *testing.T) {
+		closed := httptest.NewServer(http.NotFoundHandler())
+		closedPort := strings.TrimPrefix(closed.URL, "http://127.0.0.1:")
+		closed.Close() // the global settings point where nothing listens
+
+		u, _ := url.Parse(e.srv.URL)
+		e.writeConfig(t, fmt.Sprintf(`{"port": %s, "projects": {%q: {"port": %s}}}`, closedPort, e.dir, u.Port()))
+
+		r := e.run(t, "", "-v", "/json")
+		expect(t, r, 0, jsonBody)
+		contains(t, "stderr", r.stderr, "config: project "+e.dir+"\n")
 	})
 }
 
