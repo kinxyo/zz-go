@@ -561,6 +561,73 @@ func TestE2EConfig(t *testing.T) {
 	})
 }
 
+func TestE2ERun(t *testing.T) {
+	e := newEnv(t)
+	e.config(t, "")
+
+	collection := func(t *testing.T, name, content string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(e.dir, name), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	collection(t, ".env", "PASSWORD=hunter2\n")
+	collection(t, "api.zz.json", `{
+		"zz": 1,
+		"name": "e2e api",
+		"dotenv": ".env",
+		"auth": {
+			"login": {"method": "POST", "url": "/login", "body": {"password": "{{PASSWORD}}"}, "capture": {"token": "json.token"}},
+			"headers": {"Authorization": "Bearer {{token}}"}
+		},
+		"requests": [
+			{"name": "create", "method": "POST", "url": "/echo", "body": {"z": 1, "a": 2}, "capture": {"id": "json.id"}},
+			{"method": "GET", "url": "/echo/{{id}}", "auth": "none"}
+		]
+	}`)
+
+	t.Run("prints each request as it would be sent; nothing is sent", func(t *testing.T) {
+		r := e.run(t, "", "run", "api.zz.json", "-H", "X-Trace: 1")
+		if r.code != 0 {
+			t.Fatalf("exit %d\nstderr: %s", r.code, r.stderr)
+		}
+		contains(t, "stdout", r.stdout,
+			"e2e api\n",
+			"login\nPOST "+e.srv.URL+"/login\n", `{"password":"hunter2"}`,
+			"request 1 (create)\nPOST "+e.srv.URL+"/echo\nAuthorization: Bearer {{token}}\n", `{"z":1,"a":2}`,
+			"request 2\nGET "+e.srv.URL+"/echo/{{id}}\n",
+			"X-Trace: 1\n",
+		)
+		if strings.Count(r.stdout, "Authorization") != 1 {
+			t.Errorf("only request 1 sends the auth header:\n%s", r.stdout)
+		}
+	})
+
+	cases := []struct {
+		name   string
+		args   []string
+		stderr string
+	}{
+		{"no file", []string{"run"}, "zz run needs a collection file"},
+		{"a file that isn't there", []string{"run", "nope.zz.json"}, "open nope.zz.json: no such file or directory"},
+		{"a flag that doesn't apply", []string{"run", "api.zz.json", "-i"}, "-i doesn't apply to zz run"},
+		{"a broken file", []string{"run", "broken.zz.json"}, "broken.zz.json:1:"},
+		{"a file that doesn't validate", []string{"run", "invalid.zz.json"}, "invalid.zz.json: request 1: method \"GRAB\" isn't one zz knows\n"},
+	}
+
+	collection(t, "broken.zz.json", `{"zz": 1,`)
+	collection(t, "invalid.zz.json", `{"zz": 1, "requests": [{"method": "GRAB", "url": "/"}]}`)
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := e.run(t, "", c.args...)
+			expect(t, r, 2, "")
+			contains(t, "stderr", r.stderr, c.stderr)
+		})
+	}
+}
+
 func TestE2EHelpAndVersion(t *testing.T) {
 	e := newEnv(t)
 

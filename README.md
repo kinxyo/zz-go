@@ -299,7 +299,10 @@ Where curl has a code for the same situation, zz uses the same number.
 
 ## Not yet
 
-- `zz run [file]` reads a `.zz` collection file and prints its tokens. It does not send the requests.
+- `zz run <file>` reads a `.zz.json` collection (see `example/api.zz.json`), checks all of it,
+  and prints each request as it would be sent: method, full URL, headers and body, with values
+  captured during a run left as `{{name}}`. It does not send the requests yet. A file that doesn't
+  check out lists every problem and exits with status 2.
 - Running `zz` with no arguments is a placeholder; there is no interactive mode yet.
 
 ## Development

@@ -1,0 +1,46 @@
+{
+  "zz": 1,
+  "name": "posts api",
+  "dotenv": ".env",
+  "variables": { "baseURL": "http://localhost:8000" },
+  "headers": { "X-API-Version": "2.0" },
+  "auth": {
+    "login": {
+      "method": "POST",
+      "url": "/auth/login",
+      "body": { "email": "{{EMAIL}}", "password": "{{PASSWORD}}" },
+      "capture": { "token": "json.access_token" }
+    },
+    "headers": { "Authorization": "Bearer {{token}}" }
+  },
+  "requests": [
+    {
+      "name": "create post",
+      "method": "POST",
+      "url": "/post/create",
+      "body": { "content": "hello" },
+      "expect": ["status 201"],
+      "capture": { "postId": "json.id" }
+    },
+    {
+      "name": "get post",
+      "method": "GET",
+      "url": "/post/{{postId}}",
+      "expect": ["status 200", "json.content == hello"]
+    },
+    {
+      "name": "update post",
+      "method": "PATCH",
+      "url": "/post/{{postId}}",
+      "body": { "id": "{{postId}}", "content": "edited by {{EMAIL}}" },
+      "expect": ["status 2xx"]
+    },
+    {
+      "name": "no token is rejected",
+      "method": "GET",
+      "url": "/post/fetchall",
+      "auth": "none",
+      "expect": ["status 401"]
+    }
+  ]
+}
