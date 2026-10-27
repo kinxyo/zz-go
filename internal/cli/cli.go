@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/kinxyo/zz-go/internal/config"
 	"github.com/kinxyo/zz-go/internal/network"
@@ -21,15 +20,12 @@ func Run(args []string, flags *terminal.Flags, conf config.Settings, project str
 		terminal.FatalWith(exitUsage, "%s\n", err)
 	}
 
-	// 1. Parse URL
-	r.MakeURL(conf.BaseURL(), *flags.ForceHttp)
-
-	// 2. Read Body from a file, for @path (even with -r: -r is about what's done to the body)
+	// 1. Read Body from a file, for @path (even with -r: -r is about what's done to the body)
 	if err := r.ReadBody(); err != nil {
 		terminal.FatalWith(exitUsage, "%s\n", err)
 	}
 
-	// 3. Parse Body (-r sends it as typed, with no Content-Type detected)
+	// 2. Parse Body (-r sends it as typed, with no Content-Type detected)
 	bodyType := ""
 	if !*flags.Raw {
 		bodyType, err = r.ParseBody()
@@ -38,19 +34,12 @@ func Run(args []string, flags *terminal.Flags, conf config.Settings, project str
 		}
 	}
 
-	// 4. Parse Headers
-	if err := r.BuildHeaders(bodyType, *flags.RequestHeaders, conf.UserAgent); err != nil {
+	// 3. URL, headers and timeout, the same steps as zz run
+	if err := r.Prepare(conf, flags, network.Parts{Base: conf.BaseURL(), ContentType: bodyType}); err != nil {
 		terminal.FatalWith(exitUsage, "%s\n", err)
 	}
 
-	// 5. Set Timeout
-	seconds := conf.Timeout
-	if *flags.Timeout >= 0 { // -m wins when it was given (-1 means it wasn't), otherwise the config's.
-		seconds = *flags.Timeout
-	}
-	r.Timeout = time.Duration(seconds) * time.Second
-
-	// 6. Make network request. -v first says which settings it was made with, so a request
+	// 4. Make network request. -v first says which settings it was made with, so a request
 	// that fails still shows it (a renamed directory no longer matches its project entry).
 	if *flags.Verbose {
 		if project == "" {
@@ -65,7 +54,7 @@ func Run(args []string, flags *terminal.Flags, conf config.Settings, project str
 		terminal.FatalWith(exitCode(err), "%s\n", err)
 	}
 
-	// 7. Aftermath
+	// 5. Aftermath
 	shown := res.Print(printOpts(flags, r.Method))
 
 	if *flags.Fail && res.StatusCode >= 400 {

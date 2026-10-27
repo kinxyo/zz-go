@@ -28,7 +28,7 @@ var helpSections = []helpSection{
 		rows: []helpRow{
 			{"help, -h", "show this help"},
 			{"version, v", "show the version"},
-			{"run <file>", "check a .zz.json collection and show its requests (not sent yet)"},
+			{"run <file>", "run a .zz.json collection: login, then each request (expect isn't checked yet)"},
 		},
 	},
 	{

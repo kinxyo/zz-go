@@ -299,10 +299,20 @@ Where curl has a code for the same situation, zz uses the same number.
 
 ## Not yet
 
-- `zz run <file>` reads a `.zz.json` collection (see `example/api.zz.json`), checks all of it,
-  and prints each request as it would be sent: method, full URL, headers and body, with values
-  captured during a run left as `{{name}}`. It does not send the requests yet. A file that doesn't
-  check out lists every problem and exits with status 2.
+- `zz run <file>` runs a `.zz.json` collection (see `example/api.zz.json`). The whole file is
+  checked first; a problem lists every one, sends nothing, and exits with status 2. Then login
+  runs, then each request in order, and each gets a line: name, method, URL as written, status
+  and time.
+  - Captured values (`json.<path>` or `header <Name>`) fill in `{{name}}` in the requests below.
+    A capture that finds nothing fails its request, and a request that needs its value is
+    skipped.
+  - Cookies set by a response are sent on the requests after it, even with `"auth": "none"`.
+  - A request that can't be sent fails, and the run goes on. A failed login (no 2xx, or a
+    capture that found nothing) stops the run.
+  - `-v` adds each URL sent and each response (`-p` pretty-prints its body). `-H`, `-m` and `-d`
+    apply to every request, login included.
+  - It exits 0 when everything passed, and 1 when anything failed or was skipped.
+  - `expect` isn't checked yet: a request passes on any response, login on a 2xx.
 - Running `zz` with no arguments is a placeholder; there is no interactive mode yet.
 
 ## Development

@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
+
+	"github.com/kinxyo/zz-go/internal/network"
 )
 
 // subject is what an expectation or a capture reads from a response.
@@ -130,6 +133,119 @@ func parseSubject(s string) (subject, string, error) {
 	}
 
 	return subject{}, "", fmt.Errorf("%q isn't something zz can check: use status, text, header <Name> or json.<path>", word)
+}
+
+// String is the subject as written in the file: json.items.0.id, header Location.
+func (s subject) String() string {
+	switch s.kind {
+	case "header":
+		return "header " + s.header
+	case "json":
+		return strings.Join(append([]string{"json"}, s.path...), ".")
+	}
+	return s.kind
+}
+
+// read returns the subject's value in a response, as JSON: the status is a number, the text and
+// a header are strings, and a json path is the value found there, with its type.
+func (s subject) read(res *network.Result) (json.RawMessage, error) {
+	switch s.kind {
+	case "status":
+		return json.RawMessage(strconv.Itoa(res.StatusCode)), nil
+
+	case "text":
+		return encode(string(res.Body)), nil
+
+	case "header":
+		values := res.Header.Values(s.header)
+		if len(values) == 0 {
+			return nil, fmt.Errorf("%s not found", s)
+		}
+		return encode(strings.Join(values, ", ")), nil
+	}
+
+	if !json.Valid(res.Body) {
+		return nil, errors.New("response isn't JSON")
+	}
+
+	v := json.RawMessage(res.Body)
+	for i, key := range s.path {
+		next, ok := step(v, key, i == len(s.path)-1)
+		if !ok {
+			return nil, fmt.Errorf("%s not found", s)
+		}
+		v = next
+	}
+
+	return compact(v), nil
+}
+
+// step returns what key names in v: an object's key, an array's index, or, as the last key,
+// "length": the number of elements of an array, keys of an object, or characters of a string. An
+// object's own "length" key wins over its length.
+func step(v json.RawMessage, key string, last bool) (json.RawMessage, bool) {
+	length := func(n int) (json.RawMessage, bool) {
+		if !last || key != "length" {
+			return nil, false
+		}
+		return json.RawMessage(strconv.Itoa(n)), true
+	}
+
+	switch v = trimSpace(v); v[0] {
+	case '{':
+		var m map[string]json.RawMessage
+		_ = json.Unmarshal(v, &m) // v is valid JSON
+		if x, ok := m[key]; ok {
+			return x, true
+		}
+		return length(len(m))
+
+	case '[':
+		var a []json.RawMessage
+		_ = json.Unmarshal(v, &a)
+		if n, ok := index(key); ok && n < len(a) {
+			return a[n], true
+		}
+		return length(len(a))
+
+	case '"':
+		return length(utf8.RuneCountInString(text(v)))
+	}
+
+	return nil, false
+}
+
+// index reads an array index: digits only, so "+1" and "-0" are keys.
+func index(key string) (int, bool) {
+	for _, c := range key {
+		if c < '0' || c > '9' {
+			return 0, false
+		}
+	}
+	n, err := strconv.Atoi(key)
+	return n, err == nil
+}
+
+func trimSpace(v json.RawMessage) json.RawMessage {
+	return json.RawMessage(strings.TrimSpace(string(v)))
+}
+
+// capture takes each of caps from res into sc, and returns a problem for each one that found
+// nothing. The ones that did are kept either way.
+func (sc *scope) capture(caps map[string]string, res *network.Result) []string {
+	var problems []string
+
+	for _, name := range sortedKeys(caps) {
+		subj, _ := parseCapture(caps[name]) // checked when the file was loaded
+		v, err := subj.read(res)
+		if err != nil {
+			problems = append(problems, fmt.Sprintf("capture %s: %s", name, err))
+			continue
+		}
+		sc.captured[name] = v
+	}
+
+	return problems
 }
 
 func isNumber(v json.RawMessage) bool {

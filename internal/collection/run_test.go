@@ -28,6 +28,9 @@ func TestCheckArgs(t *testing.T) {
 	if err := checkArgs([]string{"run", "api.zz.json"}, flags(nil)); err != nil {
 		t.Errorf("a file and no flags: %v", err)
 	}
+	if err := checkArgs([]string{"run", "api.zz.json"}, flags(func(f *terminal.Flags) { *f.Verbose, *f.Pretty = true, true })); err != nil {
+		t.Errorf("-v -p: %v", err)
+	}
 
 	cases := []struct {
 		args []string
@@ -39,6 +42,8 @@ func TestCheckArgs(t *testing.T) {
 		{[]string{"run", "a.zz.json"}, func(f *terminal.Flags) { *f.Fail = true }, "-f doesn't apply to zz run"},
 		{[]string{"run", "a.zz.json"}, func(f *terminal.Flags) { *f.Raw = true }, "-r doesn't apply to zz run"},
 		{[]string{"run", "a.zz.json"}, func(f *terminal.Flags) { *f.PrintHeaders = true }, "-i doesn't apply to zz run"},
+		{[]string{"run", "a.zz.json"}, func(f *terminal.Flags) { *f.Pretty = true }, "-p pretty-prints the bodies -v shows; add -v"},
+		{[]string{"run", "a.zz.json"}, func(f *terminal.Flags) { *f.RequestHeaders = []string{": x"} }, `header ": x": want "Key: Value"`},
 	}
 	for _, c := range cases {
 		err := checkArgs(c.args, flags(c.set))
@@ -154,5 +159,37 @@ func TestPrepareURLAndBody(t *testing.T) {
 					nr.URL, nr.Body, nr.Header.Get("Content-Type"), nr.Timeout, tc.url, tc.body, tc.ctype, tc.timeout)
 			}
 		})
+	}
+}
+
+func TestMissing(t *testing.T) {
+	c := load(t, `{
+		"zz": 1,
+		"variables": {"v": 1},
+		"requests": [
+			{"name": "first", "method": "POST", "url": "/a", "capture": {"id": "json.id"}},
+			{"method": "POST", "url": "/b", "capture": {"id": "json.id", "other": "json.x"}},
+			{"method": "GET", "url": "/c/{{v}}", "headers": {"X-Other": "{{other}}"}, "body": {"id": "{{id}}"}}
+		]
+	}`)
+	sc := c.scope()
+
+	// url, then body, then headers
+	if name, from := c.missing(2, sc); name != "id" || from != 1 {
+		t.Errorf("missing = %q from %d; want id from index 1, the nearest request above that captures it", name, from)
+	}
+
+	sc.captured["id"] = []byte(`7`)
+	if name, from := c.missing(2, sc); name != "other" || from != 1 {
+		t.Errorf("missing = %q from %d; want other from index 1", name, from)
+	}
+
+	sc.captured["other"] = []byte(`"x"`)
+	if name, _ := c.missing(2, sc); name != "" {
+		t.Errorf("missing = %q; every value is in", name)
+	}
+
+	if got := c.short(0) + ", " + c.short(1); got != "first, request 2" {
+		t.Errorf("short = %q", got)
 	}
 }

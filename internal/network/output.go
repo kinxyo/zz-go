@@ -86,6 +86,11 @@ func (r *Result) Print(o PrintOpts) bool {
 	return true
 }
 
+// IsBinary reports whether the body would mess up a terminal (see looksBinary).
+func (r *Result) IsBinary() bool {
+	return looksBinary(r.Body, r.Header.Get("Content-Type"))
+}
+
 // looksBinary reports whether a body would mess up a terminal: it has a NUL byte, or it isn't valid
 // UTF-8 and the server didn't say it is text (a Latin-1 page sent as text/html is still text).
 func looksBinary(body []byte, contentType string) bool {

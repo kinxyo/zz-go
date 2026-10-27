@@ -21,7 +21,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -73,7 +75,26 @@ type echoed struct {
 
 const jsonBody = `{"ok":true,"n":[1,2]}`
 
-func newTestServer(t *testing.T) *httptest.Server {
+// received is one request the test server got.
+type received struct {
+	Method, Path string
+	Header       http.Header
+	Body         string
+}
+
+// serverLog is every request the test server got, in order.
+type serverLog struct {
+	mu   sync.Mutex
+	reqs []received
+}
+
+func (l *serverLog) all() []received {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return slices.Clone(l.reqs)
+}
+
+func newTestServer(t *testing.T) (*httptest.Server, *serverLog) {
 	t.Helper()
 
 	mux := http.NewServeMux()
@@ -96,6 +117,30 @@ func newTestServer(t *testing.T) *httptest.Server {
 		case <-r.Context().Done():
 		}
 	})
+	mux.HandleFunc("POST /login", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Password string }
+		json.NewDecoder(r.Body).Decode(&in)
+		if in.Password != "hunter2" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		http.SetCookie(w, &http.Cookie{Name: "sid", Value: "s-1", Path: "/"})
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"token": "tok-1"}`)
+	})
+	mux.HandleFunc("POST /items", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Location", "/items/42")
+		w.WriteHeader(http.StatusCreated)
+		io.WriteString(w, `{"id": 42}`)
+	})
+	mux.HandleFunc("/items/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		io.WriteString(w, `{"id": 42}`)
+	})
+	mux.HandleFunc("/echo/", func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, r.URL.Path)
+	})
 	mux.HandleFunc("/echo", func(w http.ResponseWriter, r *http.Request) {
 		body, _ := io.ReadAll(r.Body)
 		e := echoed{
@@ -113,9 +158,19 @@ func newTestServer(t *testing.T) *httptest.Server {
 		json.NewEncoder(w).Encode(e)
 	})
 
-	srv := httptest.NewServer(mux)
+	log := &serverLog{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		r.Body = io.NopCloser(strings.NewReader(string(body)))
+
+		log.mu.Lock()
+		log.reqs = append(log.reqs, received{r.Method, r.URL.Path, r.Header.Clone(), string(body)})
+		log.mu.Unlock()
+
+		mux.ServeHTTP(w, r)
+	}))
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, log
 }
 
 // ---- running zz -----------------------------------------------------------------------------
@@ -124,6 +179,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 type env struct {
 	dir string
 	srv *httptest.Server
+	log *serverLog // what srv received
 }
 
 func newEnv(t *testing.T) *env {
@@ -133,7 +189,8 @@ func newEnv(t *testing.T) *env {
 	}
 	t.Parallel()
 
-	return &env{dir: t.TempDir(), srv: newTestServer(t)}
+	srv, log := newTestServer(t)
+	return &env{dir: t.TempDir(), srv: srv, log: log}
 }
 
 // configPath is where zz looks for setting.json, given the variables run sets.
@@ -561,71 +618,205 @@ func TestE2EConfig(t *testing.T) {
 	})
 }
 
-func TestE2ERun(t *testing.T) {
-	e := newEnv(t)
-	e.config(t, "")
-
-	collection := func(t *testing.T, name, content string) {
-		t.Helper()
-		if err := os.WriteFile(filepath.Join(e.dir, name), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
+// file writes a file in e.dir.
+func (e *env) file(t *testing.T, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(e.dir, name), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
+}
 
-	collection(t, ".env", "PASSWORD=hunter2\n")
-	collection(t, "api.zz.json", `{
-		"zz": 1,
-		"name": "e2e api",
-		"dotenv": ".env",
-		"auth": {
-			"login": {"method": "POST", "url": "/login", "body": {"password": "{{PASSWORD}}"}, "capture": {"token": "json.token"}},
-			"headers": {"Authorization": "Bearer {{token}}"}
-		},
-		"requests": [
-			{"name": "create", "method": "POST", "url": "/echo", "body": {"z": 1, "a": 2}, "capture": {"id": "json.id"}},
-			{"method": "GET", "url": "/echo/{{id}}", "auth": "none"}
-		]
-	}`)
+// squash turns each run of spaces into one, for output whose column widths vary.
+func squash(s string) string {
+	for strings.Contains(s, "  ") {
+		s = strings.ReplaceAll(s, "  ", " ")
+	}
+	return s
+}
 
-	t.Run("prints each request as it would be sent; nothing is sent", func(t *testing.T) {
+// paths lists the method and path of each request the server got.
+func paths(reqs []received) []string {
+	var out []string
+	for _, r := range reqs {
+		out = append(out, r.Method+" "+r.Path)
+	}
+	return out
+}
+
+// loginCollection logs in with the password in .env, captures from the response, and has a
+// request that can't connect in the middle.
+const loginCollection = `{
+	"zz": 1,
+	"name": "e2e api",
+	"dotenv": ".env",
+	"auth": {
+		"login": {"method": "POST", "url": "/login", "body": {"password": "{{PASSWORD}}"}, "capture": {"token": "json.token"}},
+		"headers": {"Authorization": "Bearer {{token}}"}
+	},
+	"requests": [
+		{"name": "create", "method": "POST", "url": "/items", "body": {"z": 1, "a": 2}, "capture": {"id": "json.id", "loc": "header Location"}},
+		{"name": "read", "method": "GET", "url": "{{loc}}"},
+		{"method": "GET", "url": "/echo/{{id}}", "auth": "none"},
+		{"name": "refused", "method": "GET", "url": "%s/x"},
+		{"name": "after", "method": "DELETE", "url": "/echo"}
+	]
+}`
+
+func TestE2ERun(t *testing.T) {
+	closed := httptest.NewServer(http.NotFoundHandler())
+	closedURL := closed.URL
+	closed.Close() // nothing listens there any more
+
+	t.Run("login, captures, the cookie jar and -H, and a refused request doesn't stop the run", func(t *testing.T) {
+		e := newEnv(t)
+		e.config(t, "")
+		e.file(t, ".env", "PASSWORD=hunter2\n")
+		e.file(t, "api.zz.json", fmt.Sprintf(loginCollection, closedURL))
+
 		r := e.run(t, "", "run", "api.zz.json", "-H", "X-Trace: 1")
-		if r.code != 0 {
-			t.Fatalf("exit %d\nstderr: %s", r.code, r.stderr)
+		if r.code != 1 {
+			t.Errorf("exit %d; want 1 (one request failed)\nstderr: %s", r.code, r.stderr)
 		}
-		contains(t, "stdout", r.stdout,
-			"e2e api\n",
-			"login\nPOST "+e.srv.URL+"/login\n", `{"password":"hunter2"}`,
-			"request 1 (create)\nPOST "+e.srv.URL+"/echo\nAuthorization: Bearer {{token}}\n", `{"z":1,"a":2}`,
-			"request 2\nGET "+e.srv.URL+"/echo/{{id}}\n",
-			"X-Trace: 1\n",
+		// the refused URL's port sets the width of the url column; the skip test checks the columns
+		contains(t, "stdout", squash(r.stdout),
+			"e2e api\n\n",
+			"✓ login POST /login 200 ",
+			"✓ create POST /items 201 ",
+			"✓ read GET {{loc}} 200 ",
+			"✓ GET /echo/{{id}} 200 ",
+			"✗ refused GET "+closedURL+"/x could not connect to ",
+			"✓ after DELETE /echo 200 ",
+			"\n5 passed, 1 failed, 0 skipped\n",
 		)
-		if strings.Count(r.stdout, "Authorization") != 1 {
-			t.Errorf("only request 1 sends the auth header:\n%s", r.stdout)
+
+		got := e.log.all()
+		want := []string{"POST /login", "POST /items", "GET /items/42", "GET /echo/42", "DELETE /echo"}
+		if !slices.Equal(paths(got), want) {
+			t.Fatalf("the server got %q; want %q", paths(got), want)
+		}
+
+		login, create, noAuth, after := got[0], got[1], got[3], got[4]
+		if login.Body != `{"password":"hunter2"}` || login.Header.Get("Authorization") != "" {
+			t.Errorf("login: body %q, Authorization %q; want the .env password and no auth header", login.Body, login.Header.Get("Authorization"))
+		}
+		if create.Header.Get("Authorization") != "Bearer tok-1" || create.Body != `{"z":1,"a":2}` || create.Header.Get("Content-Type") != "application/json" {
+			t.Errorf("create: Authorization %q, body %q, Content-Type %q", create.Header.Get("Authorization"), create.Body, create.Header.Get("Content-Type"))
+		}
+		if noAuth.Header.Get("Authorization") != "" {
+			t.Errorf(`"auth": "none" sent Authorization %q`, noAuth.Header.Get("Authorization"))
+		}
+		if after.Header.Get("Authorization") != "Bearer tok-1" {
+			t.Errorf("the request after the refused one: Authorization %q", after.Header.Get("Authorization"))
+		}
+		for _, req := range got {
+			if req.Header.Get("X-Trace") != "1" {
+				t.Errorf("%s %s: no -H X-Trace", req.Method, req.Path)
+			}
+			if c := req.Header.Get("Cookie"); req.Path != "/login" && c != "sid=s-1" {
+				t.Errorf("%s %s: Cookie %q; want login's sid=s-1", req.Method, req.Path, c)
+			}
 		}
 	})
 
-	cases := []struct {
-		name   string
-		args   []string
-		stderr string
-	}{
-		{"no file", []string{"run"}, "zz run needs a collection file"},
-		{"a file that isn't there", []string{"run", "nope.zz.json"}, "open nope.zz.json: no such file or directory"},
-		{"a flag that doesn't apply", []string{"run", "api.zz.json", "-i"}, "-i doesn't apply to zz run"},
-		{"a broken file", []string{"run", "broken.zz.json"}, "broken.zz.json:1:"},
-		{"a file that doesn't validate", []string{"run", "invalid.zz.json"}, "invalid.zz.json: request 1: method \"GRAB\" isn't one zz knows\n"},
-	}
+	t.Run("a failed login stops the run", func(t *testing.T) {
+		e := newEnv(t)
+		e.config(t, "")
+		e.file(t, ".env", "PASSWORD=wrong\n")
+		e.file(t, "api.zz.json", fmt.Sprintf(loginCollection, closedURL))
 
-	collection(t, "broken.zz.json", `{"zz": 1,`)
-	collection(t, "invalid.zz.json", `{"zz": 1, "requests": [{"method": "GRAB", "url": "/"}]}`)
+		r := e.run(t, "", "run", "api.zz.json")
+		if r.code != 1 {
+			t.Errorf("exit %d; want 1", r.code)
+		}
+		contains(t, "stdout", squash(r.stdout),
+			"✗ login POST /login 401 ",
+			"\n login needs a 2xx status; got 401 Unauthorized\n",
+			"\n capture token: response isn't JSON\n",
+			"login failed, so the 5 requests after it weren't sent\n",
+		)
+		if got := paths(e.log.all()); !slices.Equal(got, []string{"POST /login"}) {
+			t.Errorf("the server got %q; want only the login", got)
+		}
+	})
 
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			r := e.run(t, "", c.args...)
-			expect(t, r, 2, "")
-			contains(t, "stderr", r.stderr, c.stderr)
-		})
-	}
+	t.Run("a capture that finds nothing fails its request and skips the ones that need it", func(t *testing.T) {
+		e := newEnv(t)
+		e.config(t, "")
+		e.file(t, "skip.zz.json", `{"zz": 1, "requests": [
+			{"name": "make", "method": "POST", "url": "/items", "capture": {"id": "json.nope"}},
+			{"name": "use", "method": "GET", "url": "/echo/{{id}}"},
+			{"name": "other", "method": "GET", "url": "/json"}
+		]}`)
+
+		r := e.run(t, "", "run", "skip.zz.json")
+		if r.code != 1 {
+			t.Errorf("exit %d; want 1", r.code)
+		}
+		contains(t, "stdout", r.stdout,
+			"✗ make   POST /items        201 ",
+			"    capture id: json.nope not found\n",
+			"- use    GET  /echo/{{id}}  skipped: needs {{id}} from make\n",
+			"✓ other  GET  /json         200 ",
+			"1 passed, 1 failed, 1 skipped\n",
+		)
+		if got := paths(e.log.all()); !slices.Equal(got, []string{"POST /items", "GET /json"}) {
+			t.Errorf("the server got %q; the skipped request was sent", got)
+		}
+	})
+
+	t.Run("every request passing exits 0; -v shows the config, the URL and the response, -p pretty", func(t *testing.T) {
+		e := newEnv(t)
+		e.config(t, "")
+		e.file(t, "ok.zz.json", `{"zz": 1, "requests": [{"method": "GET", "url": "/json"}]}`)
+
+		r := e.run(t, "", "run", "ok.zz.json")
+		expect(t, r, 0, r.stdout)
+		contains(t, "stdout", r.stdout, "ok.zz.json\n\n✓ GET /json  200 ", "1 passed, 0 failed, 0 skipped\n")
+		if strings.Contains(r.stdout, "HTTP/1.1") {
+			t.Errorf("without -v there are no response details:\n%s", r.stdout)
+		}
+
+		r = e.run(t, "", "run", "ok.zz.json", "-v", "-p")
+		expect(t, r, 0, r.stdout)
+		contains(t, "stdout", r.stdout,
+			"config: no project entry\n",
+			"    GET "+e.srv.URL+"/json\n    HTTP/1.1 200 OK\n",
+			"    Content-Type: application/json\n",
+			"\n    {\n      \"ok\": true,\n      \"n\": [\n",
+		)
+	})
+
+	t.Run("a problem with the file or the arguments exits 2, and nothing is sent", func(t *testing.T) {
+		e := newEnv(t)
+		e.config(t, "")
+		e.file(t, "api.zz.json", `{"zz": 1, "requests": [{"method": "GET", "url": "/json"}]}`)
+		e.file(t, "broken.zz.json", `{"zz": 1,`)
+		e.file(t, "invalid.zz.json", `{"zz": 1, "requests": [{"method": "GRAB", "url": "/"}, {"method": "GET", "url": "/json"}]}`)
+
+		for _, c := range []struct {
+			name   string
+			args   []string
+			stderr string
+		}{
+			{"no file", []string{"run"}, "zz run needs a collection file"},
+			{"a file that isn't there", []string{"run", "nope.zz.json"}, "open nope.zz.json: no such file or directory"},
+			{"a flag that doesn't apply", []string{"run", "api.zz.json", "-i"}, "-i doesn't apply to zz run"},
+			{"-p without -v", []string{"run", "api.zz.json", "-p"}, "-p pretty-prints the bodies -v shows; add -v"},
+			{"a bad -H", []string{"run", "api.zz.json", "-H", ": x"}, `header ": x": want "Key: Value"`},
+			{"a broken file", []string{"run", "broken.zz.json"}, "broken.zz.json:1:"},
+			{"a file that doesn't validate", []string{"run", "invalid.zz.json"}, "invalid.zz.json: request 1: method \"GRAB\" isn't one zz knows\n"},
+		} {
+			t.Run(c.name, func(t *testing.T) {
+				r := e.run(t, "", c.args...)
+				expect(t, r, 2, "")
+				contains(t, "stderr", r.stderr, c.stderr)
+			})
+		}
+
+		if got := e.log.all(); len(got) > 0 {
+			t.Errorf("the server got %q; want nothing", paths(got))
+		}
+	})
 }
 
 func TestE2EHelpAndVersion(t *testing.T) {

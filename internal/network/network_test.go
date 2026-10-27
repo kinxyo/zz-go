@@ -4,10 +4,14 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kinxyo/zz-go/internal/config"
+	"github.com/kinxyo/zz-go/internal/terminal"
 )
 
 // seen is what the test server received.
@@ -229,4 +233,88 @@ func TestCURLNoTimeout(t *testing.T) {
 	if string(res.Body) != "late" {
 		t.Errorf("body = %q", res.Body)
 	}
+}
+
+func TestCURLKeepsCookiesInTheJar(t *testing.T) {
+	got := make(chan string, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/login" {
+			http.SetCookie(w, &http.Cookie{Name: "sid", Value: "s-1", Path: "/"})
+			return
+		}
+		got <- r.Header.Get("Cookie")
+	}))
+	t.Cleanup(srv.Close)
+
+	jar, _ := cookiejar.New(nil)
+	for _, path := range []string{"/login", "/next"} {
+		if _, err := (&Request{Method: "GET", URL: srv.URL + path, Jar: jar}).CURL(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if c := <-got; c != "sid=s-1" {
+		t.Errorf("Cookie = %q; want the one /login set", c)
+	}
+}
+
+// prepFlags returns the flags Prepare reads: -d, -H and -m (-1 when it wasn't given).
+func prepFlags(forceHTTP bool, headers []string, timeout int) *terminal.Flags {
+	return &terminal.Flags{ForceHttp: &forceHTTP, RequestHeaders: &headers, Timeout: &timeout}
+}
+
+func TestPrepare(t *testing.T) {
+	conf := config.Settings{UserAgent: "conf/1", Timeout: 30}
+
+	t.Run("URL, headers in their layers, and the config's timeout", func(t *testing.T) {
+		r := Request{Method: "POST", URL: "/x", Body: "{}"}
+		err := r.Prepare(conf, prepFlags(false, []string{"X-Layer: cli"}, -1), Parts{
+			Base:        "http://127.0.0.1:9000",
+			ContentType: "application/json",
+			Headers:     []string{"X-Layer: file", "X-File: 1", "User-Agent: file/1"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if r.URL != "http://127.0.0.1:9000/x" || r.Timeout != 30*time.Second {
+			t.Errorf("URL %q, timeout %v", r.URL, r.Timeout)
+		}
+		for name, want := range map[string]string{
+			"X-Layer":      "cli",    // -H wins over the caller's headers
+			"X-File":       "1",      // the caller's headers are sent
+			"User-Agent":   "file/1", // and win over zz's defaults
+			"Content-Type": "application/json",
+		} {
+			if got := r.Header.Get(name); got != want {
+				t.Errorf("%s = %q; want %q", name, got, want)
+			}
+		}
+	})
+
+	t.Run("-d and -m", func(t *testing.T) {
+		r := Request{Method: "GET", URL: "example.com/x"}
+		if err := r.Prepare(conf, prepFlags(true, nil, 0), Parts{}); err != nil {
+			t.Fatal(err)
+		}
+		if r.URL != "http://example.com/x" || r.Timeout != 0 || r.Header.Get("User-Agent") != "conf/1" {
+			t.Errorf("URL %q, timeout %v, User-Agent %q", r.URL, r.Timeout, r.Header.Get("User-Agent"))
+		}
+	})
+
+	t.Run("a bad header is an error", func(t *testing.T) {
+		r := Request{Method: "GET", URL: "/x"}
+		if err := r.Prepare(conf, prepFlags(false, nil, -1), Parts{Headers: []string{": x"}}); err == nil {
+			t.Error("want an error")
+		}
+	})
+
+	t.Run("the caller's headers aren't changed", func(t *testing.T) {
+		layers := make([]string, 1, 2)
+		layers[0] = "A: 1"
+		r := Request{Method: "GET", URL: "/x"}
+		_ = r.Prepare(conf, prepFlags(false, []string{"B: 2"}, -1), Parts{Headers: layers})
+		if extra := layers[:2][1]; extra != "" {
+			t.Errorf("-H was written into the caller's slice: %q", extra)
+		}
+	})
 }
